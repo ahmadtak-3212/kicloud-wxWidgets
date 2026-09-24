@@ -65,6 +65,16 @@ elseif(WXWASM)
     # controls, listed in build/files like the other ports.
     wx_append_sources(CORE_SRC WASM_LOWLEVEL)
     wx_append_sources(CORE_SRC WASM)
+    # KICLOUD: W3.0P (kicloud/docs/patches.md): the port's JavaScript runtime,
+    # linked into every wxWASM program with --pre-js (src/wasm/README.md):
+    # wx.js (element registry, JS helpers), wx-dom.js (DOM controls) and
+    # scheduler.js (JSPI scheduler/wait registry). Installed next to the
+    # libraries' data so consumers find them from the install prefix.
+    install(FILES
+        "${wxSOURCE_DIR}/src/wasm/js/wx.js"
+        "${wxSOURCE_DIR}/src/wasm/js/wx-dom.js"
+        "${wxSOURCE_DIR}/src/wasm/js/scheduler.js"
+        DESTINATION "share/wxwidgets/wasm")
 endif()
 
 wx_add_library(wxcore ${CORE_SRC})

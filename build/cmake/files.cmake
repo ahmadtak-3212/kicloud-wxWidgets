@@ -394,21 +394,174 @@ set(OPENGL_QT_SRC
 # refreshes existing set() blocks, so new groups start as empty blocks here;
 # their contents come from build/files.
 set(WASM_LOWLEVEL_SRC
+    src/generic/caret.cpp
+    src/generic/icon.cpp
+    src/generic/imaglist.cpp
+    src/generic/paletteg.cpp
+    src/generic/regiong.cpp
+    src/generic/textmeasure.cpp
+    src/wasm/app.cpp
+    src/wasm/bitmap.cpp
+    src/wasm/brush.cpp
+    src/wasm/clipbrd.cpp
+    src/wasm/colour.cpp
+    src/wasm/config.cpp
+    src/wasm/cursor.cpp
+    src/wasm/dataobj.cpp
+    src/wasm/dc.cpp
+    src/wasm/dcclient.cpp
+    src/wasm/dcmemory.cpp
+    src/wasm/dcscreen.cpp
+    src/wasm/dialog.cpp
+    src/wasm/display.cpp
+    src/wasm/dnd.cpp
+    src/wasm/elementtracker.cpp
+    src/wasm/evtloop.cpp
+    src/wasm/font.cpp
+    src/wasm/fontenum.cpp
+    src/wasm/fontutil.cpp
+    src/wasm/keyboard.cpp
+    src/wasm/log.cpp
+    src/wasm/mouse.cpp
+    src/wasm/nonownedwnd.cpp
+    src/wasm/pen.cpp
+    src/wasm/popupwin.cpp
+    src/wasm/region.cpp
+    src/wasm/settings.cpp
+    src/wasm/timer.cpp
+    src/wasm/toplevel.cpp
+    src/wasm/utils.cpp
+    src/wasm/window.cpp
 )
 
 set(WASM_LOWLEVEL_HDR
+    wx/generic/caret.h
+    wx/generic/icon.h
+    wx/generic/imaglist.h
+    wx/generic/paletteg.h
+    wx/generic/region.h
+    wx/wasm/app.h
+    wx/wasm/bitmap.h
+    wx/wasm/brush.h
+    wx/wasm/chkconf.h
+    wx/wasm/clipbrd.h
+    wx/wasm/colour.h
+    wx/wasm/config.h
+    wx/wasm/cursor.h
+    wx/wasm/dataform.h
+    wx/wasm/dataobj.h
+    wx/wasm/dataobj2.h
+    wx/wasm/dc.h
+    wx/wasm/dcclient.h
+    wx/wasm/dcmemory.h
+    wx/wasm/dcscreen.h
+    wx/wasm/dnd.h
+    wx/wasm/elementtracker.h
+    wx/wasm/evtloop.h
+    wx/wasm/font.h
+    wx/wasm/nonownedwnd.h
+    wx/wasm/pen.h
+    wx/wasm/popupwin.h
+    wx/wasm/private.h
+    wx/wasm/private/dispatch.h
+    wx/wasm/private/display.h
+    wx/wasm/private/keyboard.h
+    wx/wasm/private/mailbox.h
+    wx/wasm/private/mouse.h
+    wx/wasm/private/timer.h
+    wx/wasm/private/yieldwait.h
+    wx/wasm/pthread.h
+    wx/wasm/region.h
+    wx/wasm/toplevel.h
+    wx/wasm/window.h
 )
 
 set(WASM_SRC
+    src/generic/accel.cpp
+    src/generic/activityindicator.cpp
+    src/generic/clrpickerg.cpp
+    src/generic/collpaneg.cpp
+    src/generic/colrdlgg.cpp
+    src/generic/dirdlgg.cpp
+    src/generic/fdrepdlg.cpp
+    src/generic/filedlgg.cpp
+    src/generic/filepickerg.cpp
+    src/generic/fontdlgg.cpp
+    src/generic/fontpickerg.cpp
+    src/generic/listctrl.cpp
+    src/generic/mdig.cpp
+    src/generic/prntdlgg.cpp
+    src/generic/statusbr.cpp
+    src/wasm/anybutton.cpp
+    src/wasm/bmpbuttn.cpp
+    src/wasm/button.cpp
+    src/wasm/checkbox.cpp
+    src/wasm/checklst.cpp
+    src/wasm/choice.cpp
+    src/wasm/combobox.cpp
+    src/wasm/control.cpp
+    src/wasm/domevents.cpp
+    src/wasm/frame.cpp
+    src/wasm/gauge.cpp
+    src/wasm/listbox.cpp
+    src/wasm/menu.cpp
+    src/wasm/menuitem.cpp
+    src/wasm/notebook.cpp
+    src/wasm/radiobox.cpp
+    src/wasm/radiobut.cpp
+    src/wasm/scrolbar.cpp
+    src/wasm/slider.cpp
+    src/wasm/spinbutt.cpp
+    src/wasm/statbmp.cpp
+    src/wasm/statbox.cpp
+    src/wasm/statline.cpp
+    src/wasm/stattext.cpp
+    src/wasm/textctrl.cpp
+    src/wasm/textentry.cpp
+    src/wasm/tglbtn.cpp
+    src/wasm/toolbar.cpp
+    src/wasm/tooltip.cpp
 )
 
 set(WASM_HDR
+    wx/wasm/anybutton.h
+    wx/wasm/bmpbuttn.h
+    wx/wasm/button.h
+    wx/wasm/checkbox.h
+    wx/wasm/checklst.h
+    wx/wasm/choice.h
+    wx/wasm/combobox.h
+    wx/wasm/control.h
+    wx/wasm/dialog.h
+    wx/wasm/frame.h
+    wx/wasm/gauge.h
+    wx/wasm/listbox.h
+    wx/wasm/menu.h
+    wx/wasm/menuitem.h
+    wx/wasm/notebook.h
+    wx/wasm/private/dom.h
+    wx/wasm/radiobox.h
+    wx/wasm/radiobut.h
+    wx/wasm/scrolbar.h
+    wx/wasm/slider.h
+    wx/wasm/spinbutt.h
+    wx/wasm/statbmp.h
+    wx/wasm/statbox.h
+    wx/wasm/statline.h
+    wx/wasm/stattext.h
+    wx/wasm/textctrl.h
+    wx/wasm/textentry.h
+    wx/wasm/tglbtn.h
+    wx/wasm/toolbar.h
+    wx/wasm/tooltip.h
 )
 
 set(OPENGL_WASM_SRC
+    src/wasm/glcanvas.cpp
 )
 
 set(OPENGL_WASM_HDR
+    wx/wasm/glcanvas.h
 )
 
 set(BASE_CMN_SRC
