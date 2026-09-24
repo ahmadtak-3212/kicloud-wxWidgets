@@ -2323,8 +2323,9 @@
 #   endif
 #endif /* wxUSE_TREELISTCTRL */
 
+/* KICLOUD: W3.1 (kicloud/docs/patches.md): wxUSE_WEBVIEW_WASM is the wxWASM backend. */
 #if wxUSE_WEBVIEW && !(wxUSE_WEBVIEW_WEBKIT || wxUSE_WEBVIEW_WEBKIT2 || \
-                       wxUSE_WEBVIEW_IE || wxUSE_WEBVIEW_EDGE)
+                       wxUSE_WEBVIEW_IE || wxUSE_WEBVIEW_EDGE || wxUSE_WEBVIEW_WASM)
 #   ifdef wxABORT_ON_CONFIG_ERROR
 #       error "wxUSE_WEBVIEW requires at least one backend"
 #   else

@@ -561,6 +561,12 @@ if(wxUSE_GUI)
                 message(WARNING "webkit not found or enabled, wxWebview won't be available")
                 wx_option_force_value(wxUSE_WEBVIEW OFF)
             endif()
+        elseif(WXWASM)
+            # KICLOUD: W3.1 (kicloud/docs/patches.md): wxWebView on wasm uses the
+            # port's own backend (an iframe, kicloud W3.16), selected by
+            # wxUSE_WEBVIEW_WASM; KiCad needs the wxWebView classes.
+            set(wxUSE_WEBVIEW_WEBKIT OFF)
+            set(wxUSE_WEBVIEW_WASM ON)
         else()
             set(wxUSE_WEBVIEW_WEBKIT OFF)
         endif()
