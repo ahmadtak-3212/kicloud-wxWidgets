@@ -123,16 +123,33 @@ static void ScheduleThreadForDeletion();
 static void DeleteThread(wxThread *This);
 
 #ifdef __EMSCRIPTEN__
-// KICLOUD: W3.1. Set by wxThreadInternal::PthreadStart() just before it calls
-// wxThread::Exit() at the end of the thread: Exit() then returns to it instead
-// of calling pthread_exit(). Emscripten's pthread_exit() marks the thread as
-// exited and wakes its joiner (which frees the thread's stack, TLS and pthread
-// block) before it unwinds the stack, so C++ cleanups still on the stack (the
-// wxThreadSpecificInfo scope guard in PthreadStart()) would run on freed
-// memory, possibly already reused by a new thread. Returning from the start
-// routine runs them first; emscripten then ends the thread with the returned
-// value, exactly as pthread_exit() would. See kicloud/docs/patches.md.
-static thread_local bool gs_exitReturnsToStart = false;
+// KICLOUD: W3.1. How wxThread::Exit() ends the calling wxThread. Emscripten's
+// pthread_exit() marks the thread as exited and wakes its joiner (which frees
+// the thread's stack, TLS and pthread block) before it unwinds the stack, so
+// C++ cleanups still on the stack (the wxThreadSpecificInfo scope guard in
+// PthreadStart(), and any object in Entry()'s frames) would run on freed
+// memory, possibly already reused by a new thread. So a wxThread ends by
+// returning from its start routine: at the end of PthreadStart(), Exit()
+// returns to it (wxEXIT_RETURN); from inside Entry(), Exit() throws
+// wxThreadExitUnwind, which unwinds Entry() (running its cleanups, as glibc's
+// forced unwinding does) to PthreadStart() (wxEXIT_UNWIND). Emscripten then ends
+// the thread with the returned value, exactly as pthread_exit() would. Only
+// the cancellation handler (inside pthread_exit()) still uses pthread_exit().
+// See kicloud/docs/patches.md.
+enum
+{
+    wxEXIT_PTHREAD,     // call pthread_exit()
+    wxEXIT_RETURN,      // return to PthreadStart(), which returns the code
+    wxEXIT_UNWIND       // throw wxThreadExitUnwind to PthreadStart()
+};
+static thread_local int gs_exitMode = wxEXIT_PTHREAD;
+// set once Exit() has thrown wxThreadExitUnwind: Entry() must not return after it
+static thread_local bool gs_exitUnwinding = false;
+
+struct wxThreadExitUnwind
+{
+    wxThread::ExitCode status;
+};
 #endif // __EMSCRIPTEN__
 
 // ----------------------------------------------------------------------------
@@ -890,6 +907,11 @@ void *wxThreadInternal::PthreadStart(wxThread *thread)
     // have to declare this before pthread_cleanup_push() which defines a
     // block!
     bool dontRunAtAll;
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: W3.1, set when Exit() was called from Entry() (see gs_exitMode)
+    bool exitedInEntry = false;
+    wxThread::ExitCode exitedInEntryCode = NULL;
+#endif
 
 #ifdef wxHAVE_PTHREAD_CLEANUP
     // install the cleanup handler which will be called if the thread is
@@ -918,13 +940,38 @@ void *wxThreadInternal::PthreadStart(wxThread *thread)
 
         wxTRY
         {
+#if defined(__EMSCRIPTEN__) && !defined(wxNO_EXCEPTIONS)
+            // KICLOUD: W3.1, see gs_exitMode.
+            gs_exitMode = wxEXIT_UNWIND;
             pthread->m_exitcode = thread->Entry();
+            gs_exitMode = wxEXIT_PTHREAD;
+            if ( gs_exitUnwinding )
+            {
+                // Entry() caught Exit()'s unwinding and returned: the thread
+                // object may already be gone (glibc aborts here too).
+                wxFAIL_MSG(wxT("wxThread::Exit() unwinding was caught and not rethrown"));
+                abort();
+            }
+#else
+            pthread->m_exitcode = thread->Entry();
+#endif
 
             wxLogTrace(TRACE_THREADS,
                        wxT("Thread %p Entry() returned %lu."),
                        THR_ID(pthread), wxPtrToUInt(pthread->m_exitcode));
         }
 #ifndef wxNO_EXCEPTIONS
+#ifdef __EMSCRIPTEN__
+        // KICLOUD: W3.1. Exit() was called from Entry() and has done its work
+        // (a detached thread's objects are deleted): leave without touching
+        // them, after popping the cleanup handler below.
+        catch ( const wxThreadExitUnwind& unwind )
+        {
+            gs_exitMode = wxEXIT_PTHREAD;
+            exitedInEntry = true;
+            exitedInEntryCode = unwind.status;
+        }
+#endif // __EMSCRIPTEN__
 #ifdef HAVE_ABI_FORCEDUNWIND
         // When using common C++ ABI under Linux we must always rethrow this
         // special exception used to unwind the stack when the thread was
@@ -939,10 +986,16 @@ void *wxThreadInternal::PthreadStart(wxThread *thread)
 #endif // HAVE_ABI_FORCEDUNWIND
         catch ( ... )
         {
+#ifdef __EMSCRIPTEN__
+            gs_exitMode = wxEXIT_PTHREAD; // KICLOUD: W3.1, see gs_exitMode
+#endif
             wxTheApp->OnUnhandledException();
         }
 #endif // !wxNO_EXCEPTIONS
 
+#ifdef __EMSCRIPTEN__
+        if ( !exitedInEntry ) // KICLOUD: W3.1, Exit() already did this
+#endif
         {
             wxCriticalSectionLocker lock(thread->m_critsect);
 
@@ -970,6 +1023,12 @@ void *wxThreadInternal::PthreadStart(wxThread *thread)
     #endif
 #endif // wxHAVE_PTHREAD_CLEANUP
 
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: W3.1, the thread ended with Exit() from Entry(): return its code.
+    if ( exitedInEntry )
+        return exitedInEntryCode;
+#endif
+
     if ( dontRunAtAll )
     {
         // FIXME: deleting a possibly joinable thread here???
@@ -981,10 +1040,10 @@ void *wxThreadInternal::PthreadStart(wxThread *thread)
     {
 #ifdef __EMSCRIPTEN__
         // KICLOUD: W3.1. Let Exit() return here and end the thread by
-        // returning from its start routine (see gs_exitReturnsToStart). Read
-        // the exit code first: Exit() deletes a detached thread's objects.
+        // returning from its start routine (see gs_exitMode). Read the exit
+        // code first: Exit() deletes a detached thread's objects.
         const wxThread::ExitCode exitcode = pthread->m_exitcode;
-        gs_exitReturnsToStart = true;
+        gs_exitMode = wxEXIT_RETURN;
         thread->Exit(exitcode);
 
         return exitcode;
@@ -1011,6 +1070,12 @@ void wxThreadInternal::Cleanup(wxThread *thread)
 {
     if (pthread_getspecific(gs_keySelf) == 0)
         return;
+
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: W3.1. We run inside pthread_exit() (cancellation): Exit() below
+    // must end the thread with pthread_exit() too, see gs_exitMode.
+    gs_exitMode = wxEXIT_PTHREAD;
+#endif
 
     {
         wxCriticalSectionLocker lock(thread->m_critsect);
@@ -1764,11 +1829,10 @@ void wxThread::Exit(ExitCode status)
                   wxT("wxThread::Exit() can only be called in the context of the same thread") );
 
 #ifdef __EMSCRIPTEN__
-    // KICLOUD: W3.1, see gs_exitReturnsToStart. Only the end of PthreadStart()
-    // sets it; any other call (from Entry() or a cancellation handler) still
-    // ends the thread with pthread_exit().
-    const bool returnToStart = gs_exitReturnsToStart;
-    gs_exitReturnsToStart = false;
+    // KICLOUD: W3.1, see gs_exitMode (a nested Exit() from OnExit() uses
+    // pthread_exit()).
+    const int exitMode = gs_exitMode;
+    gs_exitMode = wxEXIT_PTHREAD;
 #endif // __EMSCRIPTEN__
 
     if ( m_isDetached )
@@ -1811,8 +1875,16 @@ void wxThread::Exit(ExitCode status)
 
 #ifdef __EMSCRIPTEN__
     // KICLOUD: W3.1, PthreadStart() returns the exit code itself.
-    if ( returnToStart )
+    if ( exitMode == wxEXIT_RETURN )
         return;
+#ifndef wxNO_EXCEPTIONS
+    if ( exitMode == wxEXIT_UNWIND )
+    {
+        gs_exitUnwinding = true;
+        const wxThreadExitUnwind unwind = { status };
+        throw unwind;
+    }
+#endif // !wxNO_EXCEPTIONS
 #endif // __EMSCRIPTEN__
 
     // terminate the thread (pthread_exit() never returns)
