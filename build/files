@@ -411,6 +411,7 @@ OPENGL_QT_SRC=
 
 ## WebAssembly (wxWASM)
 
+# KICLOUD: adapted from pcbjam@8bad5f58e9:build/bakefiles/files.bkl (W3.0P: its WASM groups)
 # KICLOUD: W3.1 adds the wxWASM groups (kicloud/docs/patches.md); W3.0P fills
 # them with the port imported from pcbjam@8bad5f58e9 (its build/bakefiles/files.bkl
 # WASM groups; include/wx/wasm/setup.h is not listed: CMake generates setup.h;

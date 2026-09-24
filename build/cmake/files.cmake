@@ -390,6 +390,7 @@ set(OPENGL_QT_SRC
     src/qt/glcanvas.cpp
 )
 
+# KICLOUD: adapted from pcbjam@8bad5f58e9:build/bakefiles/files.bkl (W3.0P: the WASM groups, via build/files)
 # KICLOUD: W3.1 wxWASM groups (kicloud/docs/patches.md). build/upmake only
 # refreshes existing set() blocks, so new groups start as empty blocks here;
 # their contents come from build/files.
