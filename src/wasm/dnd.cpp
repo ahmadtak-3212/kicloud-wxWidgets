@@ -47,6 +47,20 @@ wxDropSource::wxDropSource(wxWindow *WXUNUSED(win),
 {
 }
 
+// KICLOUD: W3.0P: the data-object constructor of the other ports.
+wxDropSource::wxDropSource(wxDataObject& data,
+                           wxWindow *WXUNUSED(win),
+                           const wxCursor &copy,
+                           const wxCursor &move,
+                           const wxCursor &none)
+    : wxDropSourceBase(copy, move, none),
+      m_dropFlags(0),
+      m_overWindow(NULL),
+      m_lastMouseEventValid(false)
+{
+    SetData(data);
+}
+
 wxDropSource::~wxDropSource()
 {
 }

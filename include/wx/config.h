@@ -24,10 +24,6 @@
 #if defined(__WINDOWS__) && wxUSE_CONFIG_NATIVE
     #include "wx/msw/regconf.h"
     #define wxConfig  wxRegConfig
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/config.h (W3.0P): wxConfig is the port's localStorage-backed wxLocalStorageConfig (src/wasm/config.cpp) when wxUSE_CONFIG_NATIVE */
-#elif defined(__WXWASM__) && wxUSE_CONFIG_NATIVE
-    #include "wx/wasm/config.h"
-    #define wxConfig wxLocalStorageConfig
 #else // either we're under Unix or wish to always use config files
     #include "wx/fileconf.h"
     #define wxConfig wxFileConfig

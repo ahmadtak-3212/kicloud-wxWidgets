@@ -203,6 +203,16 @@ function(wx_write_config)
     string(STRIP "${WXCONFIG_CPPFLAGS}" WXCONFIG_CPPFLAGS)
     set(WXCONFIG_CXXFLAGS ${WXCONFIG_CFLAGS})
     set(WXCONFIG_LDFLAGS_GUI)
+    if(WXWASM)
+        # KICLOUD: W3.0P (kicloud/docs/patches.md): the wxWASM port's link
+        # interface, printed by `wx-config --libs` for GUI libraries so every
+        # program gets the same: its JavaScript runtime as --pre-js files
+        # (installed by lib/core) and the runtime methods that runtime calls
+        # (Module.ccall/HEAP*/stackSave/stackRestore; $stringToNewUTF8 for the
+        # JSPI rejection path). ${prefix} is wx-config's install prefix; the
+        # backslash keeps the shell from expanding $stringToNewUTF8.
+        set(WXCONFIG_LDFLAGS_GUI "--pre-js=\${prefix}/share/wxwidgets/wasm/wx.js --pre-js=\${prefix}/share/wxwidgets/wasm/wx-dom.js --pre-js=\${prefix}/share/wxwidgets/wasm/scheduler.js -sEXPORTED_RUNTIME_METHODS=ccall,HEAP8,HEAPU8,HEAP32,stackSave,stackRestore -sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=\\$stringToNewUTF8")
+    endif()
     set(WXCONFIG_RESFLAGS)
     set(WXCONFIG_RPATH "-Wl,-rpath,\$libdir")
     set(LDFLAGS_GL)

@@ -38,6 +38,13 @@ public:
                  const wxCursor &copy = wxNullCursor,
                  const wxCursor &move = wxNullCursor,
                  const wxCursor &none = wxNullCursor);
+    // KICLOUD: W3.0P: the data-object constructor every other port has
+    // (wxRichTextDropSource and wx's generic code use it).
+    wxDropSource(wxDataObject& data,
+                 wxWindow *win,
+                 const wxCursor &copy = wxNullCursor,
+                 const wxCursor &move = wxNullCursor,
+                 const wxCursor &none = wxNullCursor);
 
     virtual ~wxDropSource();
 

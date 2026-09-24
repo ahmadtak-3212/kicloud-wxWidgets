@@ -26,6 +26,8 @@
     #include "wx/gtk/webviewhistoryitem_webkit.h"
 #elif defined(__WXMSW__)
     #include "wx/msw/webviewhistoryitem_ie.h"
+#elif defined(__WXWASM__)
+    #include "wx/wasm/webviewhistoryitem.h"
 #else
     #error "wxWebView not implemented on this platform."
 #endif

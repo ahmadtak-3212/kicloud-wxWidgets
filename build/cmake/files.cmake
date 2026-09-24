@@ -524,6 +524,19 @@ set(WASM_SRC
 )
 
 set(WASM_HDR
+    wx/generic/activityindicator.h
+    wx/generic/clrpickerg.h
+    wx/generic/collpaneg.h
+    wx/generic/colrdlgg.h
+    wx/generic/dirdlgg.h
+    wx/generic/fdrepdlg.h
+    wx/generic/filedlgg.h
+    wx/generic/filepickerg.h
+    wx/generic/fontdlgg.h
+    wx/generic/fontpickerg.h
+    wx/generic/listctrl.h
+    wx/generic/mdig.h
+    wx/generic/statusbr.h
     wx/wasm/anybutton.h
     wx/wasm/bmpbuttn.h
     wx/wasm/button.h
@@ -554,6 +567,7 @@ set(WASM_HDR
     wx/wasm/tglbtn.h
     wx/wasm/toolbar.h
     wx/wasm/tooltip.h
+    wx/wasm/webviewhistoryitem.h
 )
 
 set(OPENGL_WASM_SRC

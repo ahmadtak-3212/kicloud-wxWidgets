@@ -419,7 +419,8 @@ OPENGL_QT_SRC=
 # include/wx/wasm (see src/wasm/README.md). As for the other ports,
 # *_LOWLEVEL_* holds the low-level classes (app, event loop, DC, bitmap, ...)
 # and WASM_SRC/WASM_HDR the native (DOM) controls plus the generic classes the
-# port uses instead of native ones.
+# port uses instead of native ones (their wx/generic headers are listed so
+# that they are installed).
 
 WASM_LOWLEVEL_SRC =
     src/generic/caret.cpp
@@ -549,6 +550,19 @@ WASM_SRC =
     src/wasm/tooltip.cpp
 
 WASM_HDR =
+    wx/generic/activityindicator.h
+    wx/generic/clrpickerg.h
+    wx/generic/collpaneg.h
+    wx/generic/colrdlgg.h
+    wx/generic/dirdlgg.h
+    wx/generic/fdrepdlg.h
+    wx/generic/filedlgg.h
+    wx/generic/filepickerg.h
+    wx/generic/fontdlgg.h
+    wx/generic/fontpickerg.h
+    wx/generic/listctrl.h
+    wx/generic/mdig.h
+    wx/generic/statusbr.h
     wx/wasm/anybutton.h
     wx/wasm/bmpbuttn.h
     wx/wasm/button.h
@@ -579,6 +593,7 @@ WASM_HDR =
     wx/wasm/tglbtn.h
     wx/wasm/toolbar.h
     wx/wasm/tooltip.h
+    wx/wasm/webviewhistoryitem.h
 
 OPENGL_WASM_SRC =
     src/wasm/glcanvas.cpp
