@@ -38,6 +38,13 @@ if(wxUSE_EXPAT STREQUAL "builtin")
         include(${wxEXPAT_DIR}/ConfigureChecks.cmake)
     endif()
 
+    if(EMSCRIPTEN)
+        # KICLOUD: W3.1 (kicloud/docs/patches.md): emscripten has no getrandom()
+        # or arc4random(), so expat's hash salt needs another entropy source;
+        # /dev/urandom is emscripten's crypto.getRandomValues() device.
+        set(XML_DEV_URANDOM 1)
+    endif()
+
     # Also define some options normally set by Expat's CMakeLists.txt.
     set(XML_DTD 1)
     set(XML_GE 1)

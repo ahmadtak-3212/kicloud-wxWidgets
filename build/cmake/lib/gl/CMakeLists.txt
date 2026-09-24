@@ -26,6 +26,9 @@ elseif(WXQT)
     wx_append_sources(GL_FILES OPENGL_QT)
 elseif(WXX11)
     wx_append_sources(GL_FILES OPENGL_X11)
+elseif(WXWASM)
+    # KICLOUD: W3.1 wxGLCanvas on WebGL 2 (kicloud/docs/patches.md).
+    wx_append_sources(GL_FILES OPENGL_WASM)
 endif()
 
 wx_add_library(wxgl ${GL_FILES})

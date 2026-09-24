@@ -30,6 +30,20 @@ elseif(APPLE)
     set(wxDEFAULT_TOOLKIT osx_cocoa)
     set(wxTOOLKIT_OPTIONS osx_cocoa gtk2 gtk3 gtk4 qt)
     set(wxPLATFORM OSX)
+elseif(EMSCRIPTEN)
+    # KICLOUD: W3.1 wasm toolkit selection (kicloud/docs/patches.md).
+    # KICLOUD: adapted from ahilss/wxWidgets-wasm@293bd9febaea31375447a83f0aec79f022135ac1:build/cmake/toolkit.cmake
+    # (the elseif(EMSCRIPTEN) toolkit branch; LGPL v2, see kicloud/docs/provenance.md).
+    # WebAssembly builds (Emscripten toolchain) use the wxWASM toolkit
+    # (__WXWASM__, src/wasm, include/wx/wasm), which has no native toolkit
+    # libraries. The base library is built from the Unix sources.
+    set(wxDEFAULT_TOOLKIT wasm)
+    set(wxTOOLKIT_OPTIONS wasm)
+    set(wxPLATFORM UNIX)
+    # KICLOUD: W3.1 wasm defaults, set before options.cmake so that -D on the
+    # command line still overrides them: UTF-8 wxString and the built-in PCRE2.
+    set(wxUSE_UNICODE_UTF8 ON CACHE BOOL "use UTF-8 representation for strings (Unix only)")
+    set(wxUSE_REGEX builtin CACHE STRING "enable support for wxRegEx class")
 elseif(UNIX)
     set(wxDEFAULT_TOOLKIT gtk3)
     set(wxTOOLKIT_OPTIONS gtk2 gtk3 gtk4 motif qt)

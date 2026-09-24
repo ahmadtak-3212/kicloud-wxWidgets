@@ -324,6 +324,18 @@ if(wxUSE_INTL AND NOT wxUSE_FILE)
     wx_option_force_value(wxUSE_INTL OFF)
 endif()
 
+# KICLOUD: W3.1 wasm feature matrix (kicloud/docs/patches.md). A browser has no
+# file system notifications, secret store, dial-up networking, sound device or
+# wxWebRequest backend (curl, WinHTTP and NSURLSession do not exist there), so
+# these are forced off for every Emscripten build, GUI or base-only (the GUI
+# ones are in the WXWASM checks below). Sockets stay on: wxnet is built only
+# with sockets or web requests, and KiCad uses wxSocket*/wxURL directly.
+if(EMSCRIPTEN)
+    foreach(wxWASM_OFF_OPTION wxUSE_FSWATCHER wxUSE_SECRETSTORE wxUSE_DIALUP_MANAGER wxUSE_SOUND wxUSE_WEBREQUEST)
+        wx_option_force_value(${wxWASM_OFF_OPTION} OFF)
+    endforeach()
+endif()
+
 if(wxUSE_THREADS)
     if(ANDROID)
         # Android has pthreads but FindThreads fails due to missing pthread_cancel
@@ -386,7 +398,15 @@ if(UNIX)
         endif()
     endif()
 
-    if(wxUSE_LIBICONV)
+    if(wxUSE_LIBICONV AND EMSCRIPTEN)
+        # KICLOUD: W3.1 (kicloud/docs/patches.md): iconv is part of emscripten's
+        # libc (musl), which emcc links itself in the variant the ABI needs
+        # (e.g. the threaded one). Never name a libc archive explicitly: FindICONV
+        # would pick emscripten's single-threaded libc.a and wx-config would
+        # hand it to every consumer.
+        set(ICONV_INCLUDE_DIR "")
+        set(ICONV_LIBRARIES "")
+    elseif(wxUSE_LIBICONV)
         find_package(ICONV)
         if(NOT ICONV_FOUND)
             message(WARNING "iconv not found")
@@ -430,6 +450,14 @@ if(wxUSE_GUI)
         endif()
     endif()
 
+    # KICLOUD: W3.1 WXWASM checks (kicloud/docs/patches.md): no media
+    # playback, joystick or task bar icon in a browser.
+    if(WXWASM)
+        foreach(wxWASM_OFF_OPTION wxUSE_MEDIACTRL wxUSE_JOYSTICK wxUSE_TASKBARICON)
+            wx_option_force_value(${wxWASM_OFF_OPTION} OFF)
+        endforeach()
+    endif()
+
     # WXGTK checks, match include/wx/gtk/chkconf.h
     if(WXGTK)
         wx_option_force_value(wxUSE_METAFILE OFF)
@@ -455,6 +483,13 @@ if(wxUSE_GUI)
             set(OPENGL_FOUND TRUE)
             set(OPENGL_INCLUDE_DIR "")
             set(OPENGL_LIBRARIES "-framework OpenGLES" "-framework QuartzCore" "-framework GLKit")
+        elseif(WXWASM)
+            # KICLOUD: W3.1 (kicloud/docs/patches.md): WebGL 2 through
+            # emscripten's GL library, which emcc links itself; its headers
+            # are in the emscripten sysroot. No host OpenGL search.
+            set(OPENGL_FOUND TRUE)
+            set(OPENGL_INCLUDE_DIR "")
+            set(OPENGL_LIBRARIES "")
         else()
             find_package(OpenGL)
             if(OPENGL_FOUND)

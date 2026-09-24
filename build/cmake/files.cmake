@@ -390,6 +390,27 @@ set(OPENGL_QT_SRC
     src/qt/glcanvas.cpp
 )
 
+# KICLOUD: W3.1 wxWASM groups (kicloud/docs/patches.md). build/upmake only
+# refreshes existing set() blocks, so new groups start as empty blocks here;
+# their contents come from build/files.
+set(WASM_LOWLEVEL_SRC
+)
+
+set(WASM_LOWLEVEL_HDR
+)
+
+set(WASM_SRC
+)
+
+set(WASM_HDR
+)
+
+set(OPENGL_WASM_SRC
+)
+
+set(OPENGL_WASM_HDR
+)
+
 set(BASE_CMN_SRC
     src/common/any.cpp
     src/common/appbase.cpp

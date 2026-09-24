@@ -59,6 +59,12 @@ elseif(WXQT)
     endif()
 elseif(WXX11)
     wx_append_sources(CORE_SRC X11_LOWLEVEL)
+elseif(WXWASM)
+    # KICLOUD: W3.1 wxWASM port sources (kicloud/docs/patches.md): the
+    # low-level classes (app, event loop, DC, bitmap, ...) and the native DOM
+    # controls, listed in build/files like the other ports.
+    wx_append_sources(CORE_SRC WASM_LOWLEVEL)
+    wx_append_sources(CORE_SRC WASM)
 endif()
 
 wx_add_library(wxcore ${CORE_SRC})

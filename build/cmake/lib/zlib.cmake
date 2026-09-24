@@ -43,6 +43,12 @@ if(wxUSE_ZLIB STREQUAL "builtin")
     endif()
     # Tell our modified zconf.h to include wx/setup.h.
     target_compile_definitions(wxzlib PRIVATE wxHAVE_SETUP_H=1)
+    if(EMSCRIPTEN)
+        # KICLOUD: W3.1 (kicloud/docs/patches.md): zconf.h only includes
+        # <unistd.h> (read/write/lseek/close for gz*.c) when Z_HAVE_UNISTD_H is
+        # set, and clang rejects the implicit declarations otherwise.
+        target_compile_definitions(wxzlib PRIVATE Z_HAVE_UNISTD_H)
+    endif()
     if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
         target_compile_options(wxzlib PRIVATE -Wno-deprecated-non-prototype)
     endif()

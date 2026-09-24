@@ -408,6 +408,27 @@ OPENGL_QT_HDR=
 OPENGL_QT_SRC=
     src/qt/glcanvas.cpp
 
+
+## WebAssembly (wxWASM)
+
+# KICLOUD: W3.1 adds the wxWASM groups (kicloud/docs/patches.md); W3.1b fills
+# them. The port mirrors the Qt port's class and header list one-for-one under
+# src/wasm and include/wx/wasm (see src/wasm/README.md). As for the other
+# ports, *_LOWLEVEL_* holds the low-level classes (app, event loop, DC,
+# bitmap, ...) and WASM_SRC/WASM_HDR the native (DOM) controls.
+
+WASM_LOWLEVEL_SRC =
+
+WASM_LOWLEVEL_HDR =
+
+WASM_SRC =
+
+WASM_HDR =
+
+OPENGL_WASM_SRC =
+
+OPENGL_WASM_HDR =
+
 ## Common
 
 BASE_CMN_SRC =
