@@ -70,6 +70,10 @@ public:
 #elif defined(__WXQT__)
     #define wxCURSOR_DEFAULT_TYPE   wxBITMAP_TYPE_CUR
     #include "wx/qt/cursor.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/cursor.h (W3.0P): wxWASM cursor dispatch; .cur is the default cursor type, like wxQt */
+#elif defined(__WXWASM__)
+    #define wxCURSOR_DEFAULT_TYPE   wxBITMAP_TYPE_CUR
+    #include "wx/wasm/cursor.h"
 #endif
 
 #include "wx/utils.h"

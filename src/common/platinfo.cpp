@@ -80,6 +80,9 @@ static const wxChar* const wxOperatingSystemIdNames[] =
     wxT("Unknown"),
     wxT("Unknown"),
 
+    // KICLOUD: W3.0P: name of wxOS_CHROME_OS (1 << 17), added to
+    // include/wx/platinfo.h by pcbjam@8bad5f58e9 without a table entry.
+    wxT("Chrome OS"),
 };
 
 static const wxChar* const wxPortIdNames[] =
@@ -94,7 +97,10 @@ static const wxChar* const wxPortIdNames[] =
     wxT("wxMac"),
     wxT("wxCocoa"),
     wxT("Unknown"),
-    wxT("wxQT")
+    wxT("wxQT"),
+    // KICLOUD: W3.0P: name of wxPORT_WASM (1 << 11), added to
+    // include/wx/platinfo.h by pcbjam@8bad5f58e9 without a table entry.
+    wxT("wxWASM")
 };
 
 static const wxChar* const wxBitnessNames[] =

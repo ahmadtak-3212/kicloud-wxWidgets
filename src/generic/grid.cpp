@@ -23,6 +23,11 @@
 
 #include "wx/grid.h"
 
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/grid.cpp (W3.0P): lighter header borders on the DOM port, the wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them, and the cell editor is hidden before it is disabled
+#ifdef __EMSCRIPTEN__
+    #include "wx/wasm/elementtracker.h"
+#endif
+
 #ifndef WX_PRECOMP
     #include "wx/utils.h"
     #include "wx/dcclient.h"
@@ -337,12 +342,14 @@ void wxGridRowHeaderRendererDefault::DrawBorder(const wxGrid& grid,
                                                 wxDC& dc,
                                                 wxRect& rect) const
 {
-    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW)));
+    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT)));
     dc.DrawLine(rect.GetRight(), rect.GetTop(),
                 rect.GetRight(), rect.GetBottom());
 
     dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
-                rect.GetRight() + 1, rect.GetBottom());
+                // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+                rect.GetRight(), rect.GetBottom());
 
     // Only draw the external borders when the containing control doesn't have
     // any border, otherwise they would compound with the outer border which
@@ -356,11 +363,14 @@ void wxGridRowHeaderRendererDefault::DrawBorder(const wxGrid& grid,
         ofs = 1;
     }
 
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+/*
     dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT)));
     dc.DrawLine(rect.GetLeft() + ofs, rect.GetTop(),
                 rect.GetLeft() + ofs, rect.GetBottom());
     dc.DrawLine(rect.GetLeft() + ofs, rect.GetTop(),
                 rect.GetRight(), rect.GetTop());
+*/
 
     rect.Deflate(1 + ofs);
 }
@@ -369,11 +379,13 @@ void wxGridColumnHeaderRendererDefault::DrawBorder(const wxGrid& grid,
                                                    wxDC& dc,
                                                    wxRect& rect) const
 {
-    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW)));
+    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT)));
     dc.DrawLine(rect.GetRight(), rect.GetTop(),
                 rect.GetRight(), rect.GetBottom());
     dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
-                rect.GetRight() + 1, rect.GetBottom());
+                // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+                rect.GetRight(), rect.GetBottom());
 
     // As above, don't draw the outer border if the control has its own one.
     int ofs = 0;
@@ -385,11 +397,14 @@ void wxGridColumnHeaderRendererDefault::DrawBorder(const wxGrid& grid,
         ofs = 1;
     }
 
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+/*
     dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT)));
     dc.DrawLine(rect.GetLeft(), rect.GetTop() + ofs,
                 rect.GetLeft(), rect.GetBottom());
     dc.DrawLine(rect.GetLeft(), rect.GetTop() + ofs,
                 rect.GetRight(), rect.GetTop() + ofs);
+*/
 
     rect.Deflate(1 + ofs);
 }
@@ -398,7 +413,8 @@ void wxGridCornerHeaderRendererDefault::DrawBorder(const wxGrid& grid,
                                                    wxDC& dc,
                                                    wxRect& rect) const
 {
-    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW)));
+    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT)));
     dc.DrawLine(rect.GetRight() - 1, rect.GetBottom() - 1,
                 rect.GetRight() - 1, rect.GetTop());
     dc.DrawLine(rect.GetRight() - 1, rect.GetBottom() - 1,
@@ -417,11 +433,14 @@ void wxGridCornerHeaderRendererDefault::DrawBorder(const wxGrid& grid,
         ofs = 1;
     }
 
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+/*
     dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT)));
     dc.DrawLine(rect.GetLeft() + 1, rect.GetTop() + ofs,
                 rect.GetRight() - 1, rect.GetTop() + ofs);
     dc.DrawLine(rect.GetLeft() + ofs, rect.GetTop() + ofs,
                 rect.GetLeft() + ofs, rect.GetBottom() - 1);
+*/
 
     rect.Deflate(1 + ofs);
 }
@@ -6476,6 +6495,12 @@ void wxGrid::DrawGridCellArea( wxDC& dc, const wxGridCellCoordsArray& cells )
     if ( !m_numRows || !m_numCols )
         return;
 
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#ifdef __EMSCRIPTEN__
+    // Clear existing grid cells before redrawing
+    WasmUnregisterRenderedElementsByParent(this);
+#endif
+
     int i, numCells = cells.GetCount();
     wxGridCellCoordsArray redrawCells;
 
@@ -6640,6 +6665,12 @@ void wxGrid::DrawCell( wxDC& dc, const wxGridCellCoords& coords )
     bool isCurrent = coords == m_currentCellCoords;
 
     wxRect rect = CellToRect( row, col );
+
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#ifdef __EMSCRIPTEN__
+    // Register grid cell for element tracking
+    wxWasmTrackGridCell(this, row, col, rect);
+#endif
 
     // if the editor is shown, we should use it and not the renderer
     // Note: However, only if it is really _shown_, i.e. not hidden!
@@ -7631,6 +7662,8 @@ void wxGrid::ShowCellEditControl()
     {
         if ( !IsVisible( m_currentCellCoords, false ) )
         {
+            // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+            HideCellEditControl();
             m_cellEditCtrlEnabled = false;
             return;
         }

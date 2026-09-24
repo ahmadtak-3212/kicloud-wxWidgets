@@ -80,6 +80,9 @@ wxALLOW_COMBINING_ENUMS(wxToolBarStyleFlags, wxBorder)
        #include "wx/osx/toolbar.h"
     #elif defined(__WXQT__)
         #include "wx/qt/toolbar.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/toolbar.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+        #include "wx/wasm/toolbar.h"
     #endif
 #endif // wxUSE_TOOLBAR
 

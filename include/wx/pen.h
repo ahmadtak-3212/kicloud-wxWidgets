@@ -114,6 +114,9 @@ public:
     #include "wx/osx/pen.h"
 #elif defined(__WXQT__)
     #include "wx/qt/pen.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/pen.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/pen.h"
 #endif
 
 class WXDLLIMPEXP_CORE wxPenList: public wxGDIObjListBase

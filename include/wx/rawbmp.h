@@ -190,6 +190,12 @@ typedef wxPixelFormat<unsigned char, 24, 0, 1, 2> wxImagePixelFormat;
 #elif defined(__WXQT__)
     typedef wxPixelFormat<unsigned char, 24, 0, 1, 2> wxNativePixelFormat;
 
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/rawbmp.h (W3.0P): wxWASM native pixel format (RGB + alpha, as wxImage) */
+    #define wxPIXEL_FORMAT_ALPHA 3
+#elif defined(__WXWASM__)
+    // WASM uses standard RGBA format
+    typedef wxPixelFormat<unsigned char, 24, 0, 1, 2> wxNativePixelFormat;
+
     #define wxPIXEL_FORMAT_ALPHA 3
 #endif
 

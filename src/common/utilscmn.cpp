@@ -1051,9 +1051,10 @@ bool wxSetDetectableAutoRepeat( bool WXUNUSED(flag) )
 // Launch default browser
 // ----------------------------------------------------------------------------
 
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/utilscmn.cpp (W3.0P): wxWASM implements the port-specific utils (src/wasm)
 #if defined(__WINDOWS__) && !defined(__WXQT__) || \
     defined(__WXX11__) || defined(__WXGTK__) || defined(__WXMOTIF__) || \
-    defined(__WXOSX__)
+    defined(__WXOSX__) || defined(__WXWASM__)
 
 // implemented in a port-specific utils source file:
 bool wxDoLaunchDefaultBrowser(const wxLaunchBrowserParams& params);

@@ -185,6 +185,9 @@ private:
     #include "wx/osx/checkbox.h"
 #elif defined(__WXQT__)
     #include "wx/qt/checkbox.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/checkbox.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/checkbox.h"
 #endif
 
 #endif // wxUSE_CHECKBOX

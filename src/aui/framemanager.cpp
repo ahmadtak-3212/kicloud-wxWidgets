@@ -22,6 +22,11 @@
 #if wxUSE_AUI
 
 #include "wx/aui/framemanager.h"
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/aui/framemanager.cpp (W3.0P): always live-resize on Emscripten (no XOR/wxScreenDC resize hint on a Canvas2D island), plus the wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
+
+#ifdef __EMSCRIPTEN__
+    #include "wx/wasm/elementtracker.h"
+#endif
 #include "wx/aui/dockart.h"
 #include "wx/aui/floatpane.h"
 #include "wx/aui/tabmdi.h"
@@ -790,7 +795,13 @@ unsigned int wxAuiManager::GetFlags() const
 
 // With Core Graphics on Mac or GTK 3, it's not possible to show sash feedback,
 // so we'll always use live update instead.
-#if defined(__WXMAC__) || defined(__WXGTK3__)
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+//
+// The WASM/DOM port paints AUI into a Canvas2D "island"; wxScreenDC + wxXOR
+// (the non-live sash resize hint, DrawResizeHint) neither composites nor erases
+// there, so a non-live drag smears an un-erasable grey stipple across the pane
+// and shows no real preview. Treat Emscripten like Mac/GTK3 and always live-resize.
+#if defined(__WXMAC__) || defined(__WXGTK3__) || defined(__EMSCRIPTEN__)
     #define wxUSE_AUI_LIVE_RESIZE_ALWAYS 1
 #else
     #define wxUSE_AUI_LIVE_RESIZE_ALWAYS 0
@@ -2709,6 +2720,70 @@ void wxAuiManager::Update()
 
 
     Repaint();
+
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#ifdef __EMSCRIPTEN__
+    // Update element registry with AUI parts
+    // Clear existing parts for this manager (use frame as parent)
+    WasmUnregisterRenderedElementsByParent(m_frame);
+
+    // Get dock art for caption height
+    int captionHeight = m_art ? m_art->GetMetric(wxAUI_DOCKART_CAPTION_SIZE) : 20;
+    int buttonSize = m_art ? m_art->GetMetric(wxAUI_DOCKART_PANE_BUTTON_SIZE) : 16;
+
+    // Register pane captions
+    int paneCount = m_panes.GetCount();
+    for (int i = 0; i < paneCount; i++) {
+        wxAuiPaneInfo& pane = m_panes.Item(i);
+
+        // Skip if not docked, not visible, or no caption
+        if (!pane.IsDocked() || !pane.IsShown() || !pane.HasCaption()) continue;
+
+        // Pane rect is relative to the frame
+        wxRect rect = pane.rect;
+        const int buttonY = rect.y + (captionHeight - buttonSize) / 2;
+
+        // Register the pane caption area
+        wxWasmTrackElement(m_frame, "auipart", "caption", i,
+                           pane.caption, wxEmptyString,
+                           wxRect(rect.x, rect.y, rect.width, captionHeight));
+
+        // Register close button if present
+        if (pane.HasCloseButton()) {
+            wxWasmTrackElement(m_frame, "auipart", "close", i * 10 + 1,
+                               wxT("Close"), wxEmptyString,
+                               wxRect(rect.x + rect.width - buttonSize - 4,
+                                      buttonY, buttonSize, buttonSize));
+        }
+
+        // Register pin button if present
+        if (pane.HasPinButton()) {
+            wxWasmTrackElement(m_frame, "auipart", "pin", i * 10 + 2,
+                               wxT("Pin"), wxEmptyString,
+                               wxRect(rect.x + rect.width - buttonSize * 2 - 8,
+                                      buttonY, buttonSize, buttonSize));
+        }
+
+        // Register maximize button if present
+        if (pane.HasMaximizeButton()) {
+            int offset = (pane.HasCloseButton() ? 1 : 0) + (pane.HasPinButton() ? 1 : 0);
+            int buttonX = rect.x + rect.width - buttonSize * (offset + 1) - 4 * (offset + 1);
+            wxWasmTrackElement(m_frame, "auipart", "maximize", i * 10 + 3,
+                               wxT("Maximize"), wxEmptyString,
+                               wxRect(buttonX, buttonY,
+                                      buttonSize, buttonSize));
+        }
+
+        // Register the pane content area (below the caption)
+        int contentHeight = rect.height - captionHeight;
+        if (contentHeight > 0) {
+            wxWasmTrackElement(m_frame, "auipart", "content", i * 10 + 4,
+                               pane.caption, wxEmptyString,
+                               wxRect(rect.x, rect.y + captionHeight,
+                                      rect.width, contentHeight));
+        }
+    }
+#endif
 
     // set frame's minimum size
 

@@ -118,7 +118,13 @@ WXDLLIMPEXP_BASE size_t wxWC2MB(char *buf, const wchar_t *pwz, size_t n)
 
 char* wxSetlocale(int category, const char *locale)
 {
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/wxcrt.cpp (W3.0P): wxSetlocale() does not call setlocale() under emscripten; keyed on __EMSCRIPTEN__ so wxBase is the same in the base-only and GUI builds
+#ifdef __EMSCRIPTEN__
+    char *rv = NULL;
+#else
     char *rv = setlocale(category, locale);
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#endif
     if ( locale != NULL /* setting locale, not querying */ &&
          rv /* call was successful */ )
     {

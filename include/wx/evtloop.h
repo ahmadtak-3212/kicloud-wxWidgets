@@ -298,6 +298,9 @@ private:
     #include "wx/gtk/evtloop.h"
 #elif defined(__WXQT__)
     #include "wx/qt/evtloop.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/evtloop.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/evtloop.h"
 #else // other platform
 
 #include "wx/stopwatch.h"   // for wxMilliClock_t

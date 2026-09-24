@@ -37,6 +37,11 @@
 #include "wx/calctrl.h"
 #include "wx/generic/calctrlg.h"
 
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/calctrlg.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
+#ifdef __EMSCRIPTEN__
+    #include "wx/wasm/elementtracker.h"
+#endif
+
 #define DEBUG_PAINT 0
 
 // ----------------------------------------------------------------------------
@@ -793,6 +798,12 @@ void wxGenericCalendarCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
     wxPaintDC dc(this);
 
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#ifdef __EMSCRIPTEN__
+    // Clear existing calendar date elements before redrawing
+    WasmUnregisterRenderedElementsByParent(this);
+#endif
+
     dc.SetFont(GetFont());
 
     RecalcGeometry();
@@ -1029,6 +1040,18 @@ void wxGenericCalendarCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
 
                 wxCoord x = wd*m_widthCol + (m_widthCol - width) / 2 + x0;
                 dc.DrawText(dayStr, x, y + m_heightRow / 2 - height / 2);
+
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#ifdef __EMSCRIPTEN__
+                // Register the calendar date cell for element tracking
+                wxWasmTrackElement(this, "datecell",
+                                   isSel ? "selected" : "day",
+                                   static_cast<int>((nWeek - 1) * 7 + wd),
+                                   dayStr, date.FormatDate(),
+                                   wxRect(wd*m_widthCol + x0, y,
+                                          m_widthCol, m_heightRow),
+                                   IsDateInRange(date));
+#endif
 
                 if ( !isSel && attr && attr->HasBorder() )
                 {

@@ -29,6 +29,9 @@
 #include "wx/validate.h"        // for wxDefaultValidator (always include it)
 #include "wx/windowid.h"
 
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/window.h (W3.0P): asynchronous PopupMenu(callback) overloads used by the wasm port (popup menus complete through a callback under JSPI), and the wxWASM window dispatch */
+#include <functional>
+
 #if wxUSE_PALETTE
     #include "wx/palette.h"
 #endif // wxUSE_PALETTE
@@ -1369,6 +1372,15 @@ public:
     bool PopupMenu(wxMenu *menu, const wxPoint& pos = wxDefaultPosition)
         { return PopupMenu(menu, pos.x, pos.y); }
     bool PopupMenu(wxMenu *menu, int x, int y);
+    /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
+    void PopupMenu(wxMenu *menu,
+                   const wxPoint& pos,
+                   std::function<void (bool)> callback)
+        { return PopupMenu(menu, pos.x, pos.y, callback); }
+    void PopupMenu(wxMenu *menu,
+                   int x,
+                   int y,
+                   std::function<void (bool)> callback);
 
     // simply return the id of the selected item or wxID_NONE without
     // generating any events
@@ -1978,6 +1990,8 @@ protected:
 
 #if wxUSE_MENUS
     virtual bool DoPopupMenu(wxMenu *menu, int x, int y) = 0;
+    /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
+    virtual void DoPopupMenu(wxMenu *menu, int x, int y, std::function<void (bool)> callback) = 0;
 #endif // wxUSE_MENUS
 
     // Makes an adjustment to the window position to make it relative to the
@@ -2114,6 +2128,14 @@ inline void wxWindowBase::SetInitialBestSize(const wxSize& size)
         #define wxWindowQt wxWindow
     #endif // wxUniv
     #include "wx/qt/window.h"
+/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
+#elif defined(__WXWASM__)
+    #ifdef __WXUNIVERSAL__
+        #define wxWindowNative wxWindowWasm
+    #else // !wxUniv
+        #define wxWindowWasm wxWindow
+    #endif // wxUniv
+    #include "wx/wasm/window.h"
 #endif
 
 // for wxUniversal, we now derive the real wxWindow from wxWindow<platform>,

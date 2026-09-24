@@ -11,6 +11,9 @@
 #ifndef _WX_GENERIC_MSGDLGG_H_
 #define _WX_GENERIC_MSGDLGG_H_
 
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/generic/msgdlgg.h (W3.0P): generic wxMessageDialog implements the asynchronous ShowModal(callback) overload */
+#include <functional>
+
 class WXDLLIMPEXP_FWD_CORE wxSizer;
 
 class WXDLLIMPEXP_CORE wxGenericMessageDialog : public wxMessageDialogBase
@@ -23,6 +26,8 @@ public:
                            const wxPoint& pos = wxDefaultPosition);
 
     virtual int ShowModal() wxOVERRIDE;
+    /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
+    virtual void ShowModal(std::function<void (int)> callback) wxOVERRIDE;
 
 protected:
     // Creates a message dialog taking any options that have been set after

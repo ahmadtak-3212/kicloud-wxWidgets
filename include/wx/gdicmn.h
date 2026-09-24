@@ -137,7 +137,8 @@ enum wxStockCursor
     wxCURSOR_BASED_ARROW_DOWN,
 #endif // X11
     wxCURSOR_ARROWWAIT,
-#ifdef __WXMAC__
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/gdicmn.h (W3.0P): wxWASM has real open/closed hand cursors (CSS grab/grabbing), XPM icons/bitmaps, and display scale factor helpers */
+#if defined(__WXMAC__) || defined(__WXWASM__)
     wxCURSOR_OPEN_HAND,
     wxCURSOR_CLOSED_HAND,
 #endif
@@ -149,7 +150,8 @@ enum wxStockCursor
     #define wxCURSOR_DEFAULT        wxCURSOR_ARROW
 #endif
 
-#ifndef __WXMAC__
+/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
+#if !defined(__WXMAC__) && !defined(__WXWASM__)
     // TODO CS supply openhand and closedhand cursors
     #define wxCURSOR_OPEN_HAND      wxCURSOR_HAND
     #define wxCURSOR_CLOSED_HAND    wxCURSOR_HAND
@@ -227,6 +229,10 @@ enum wxEllipsizeMode
 #elif defined(__WXQT__)
     // Initialize from an included XPM
     #define wxICON(X) wxIcon( X##_xpm )
+/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
+#elif defined(__WXWASM__)
+    // Initialize from an included XPM
+    #define wxICON(X) wxIcon( X##_xpm )
 #else
     // This will usually mean something on any platform
     #define wxICON(X) wxIcon(wxT(#X))
@@ -238,11 +244,13 @@ enum wxEllipsizeMode
 
 #if defined(__WINDOWS__) && wxUSE_WXDIB
     #define wxBITMAP(name) wxBitmap(wxT(#name), wxBITMAP_TYPE_BMP_RESOURCE)
+/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #elif defined(__WXGTK__)   || \
       defined(__WXMOTIF__) || \
       defined(__WXX11__)   || \
       defined(__WXMAC__)   || \
-      defined(__WXDFB__)
+      defined(__WXDFB__)   || \
+      defined(__WXWASM__)
     // Initialize from an included XPM
     #define wxBITMAP(name) wxBitmap(name##_xpm)
 #else // other platforms
@@ -1103,6 +1111,13 @@ extern bool WXDLLIMPEXP_CORE wxColourDisplay();
 // Returns depth of screen
 extern int WXDLLIMPEXP_CORE wxDisplayDepth();
 #define wxGetDisplayDepth wxDisplayDepth
+
+/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
+#ifdef __WXWASM__
+// WASM display scale factors
+extern double wxDisplayScaleFactor();
+extern double wxContentScaleFactor();
+#endif
 
 // get the display size
 extern void WXDLLIMPEXP_CORE wxDisplaySize(int *width, int *height);

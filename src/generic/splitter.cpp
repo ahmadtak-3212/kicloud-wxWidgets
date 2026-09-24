@@ -16,6 +16,11 @@
 
 #include "wx/splitter.h"
 
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/splitter.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
+#ifdef __EMSCRIPTEN__
+    #include "wx/wasm/elementtracker.h"
+#endif
+
 #ifndef WX_PRECOMP
     #include "wx/string.h"
     #include "wx/utils.h"
@@ -810,6 +815,32 @@ void wxSplitterWindow::SizeWindows()
 
     wxClientDC dc(this);
     DrawSash(dc);
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+
+#ifdef __EMSCRIPTEN__
+    // Update element registry with splitter sash position
+    WasmUnregisterRenderedElementsByParent(this);
+
+    // Only register if we have a sash (i.e., split mode)
+    if (IsSplit()) {
+        wxSize clientSize = GetClientSize();
+        int sashPos = GetSashPosition();
+        int sashSize = GetSashSize();
+
+        // Sash rectangle depends on the split mode
+        wxRect sashRect;
+        if (GetSplitMode() == wxSPLIT_VERTICAL)
+            sashRect = wxRect(sashPos, 0, sashSize, clientSize.y);
+        else
+            sashRect = wxRect(0, sashPos, clientSize.x, sashSize);
+
+        wxWasmTrackElement(this, "sash",
+                           GetSplitMode() == wxSPLIT_VERTICAL ? "vertical"
+                                                              : "horizontal",
+                           0,  // Only one sash per splitter
+                           wxEmptyString, wxEmptyString, sashRect);
+    }
+#endif
 }
 
 // Set pane for unsplit window

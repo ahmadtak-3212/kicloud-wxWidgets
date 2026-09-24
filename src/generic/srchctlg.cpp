@@ -15,6 +15,11 @@
 
 #include "wx/srchctrl.h"
 
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/srchctlg.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
+#ifdef __EMSCRIPTEN__
+    #include "wx/wasm/elementtracker.h"
+#endif
+
 #ifndef WX_PRECOMP
     #include "wx/button.h"
     #include "wx/dcclient.h"
@@ -538,6 +543,32 @@ void wxSearchCtrl::LayoutControls()
         m_cancelButton->SetSize(x, (height - sizeCancel.y) / 2,
                                 sizeCancel.x, sizeCancel.y);
     }
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+
+#ifdef __EMSCRIPTEN__
+    // Register search control for element tracking
+    WasmUnregisterRenderedElementsByParent(this);
+
+    // The search text area
+    wxWasmTrackElement(this, "searchctrl", "textfield", 0,
+                       GetDescriptiveText().empty() ? wxT("Search")
+                                                    : GetDescriptiveText(),
+                       m_text->GetValue(), m_text->GetRect(), IsEnabled());
+
+    if ( IsSearchButtonVisible() )
+    {
+        wxWasmTrackElement(this, "searchbutton", "search", 1,
+                           wxT("Search"), wxEmptyString,
+                           m_searchButton->GetRect(), IsEnabled());
+    }
+
+    if ( IsCancelButtonVisible() )
+    {
+        wxWasmTrackElement(this, "searchbutton", "cancel", 2,
+                           wxT("Cancel"), wxEmptyString,
+                           m_cancelButton->GetRect(), IsEnabled());
+    }
+#endif
 }
 
 wxWindowList wxSearchCtrl::GetCompositeWindowParts() const

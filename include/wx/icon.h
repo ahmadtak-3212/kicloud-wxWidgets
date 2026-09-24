@@ -58,6 +58,10 @@
 #elif defined(__WXQT__)
   #define wxICON_DEFAULT_TYPE   wxBITMAP_TYPE_XPM
   #include "wx/generic/icon.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/icon.h (W3.0P): wxWASM uses the generic wxIcon with XPM as default type */
+#elif defined(__WXWASM__)
+  #define wxICON_DEFAULT_TYPE   wxBITMAP_TYPE_XPM
+  #include "wx/generic/icon.h"
 #endif
 
 #ifndef wxICON_DIFFERENT_FROM_BITMAP

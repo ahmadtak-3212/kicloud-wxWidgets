@@ -56,6 +56,11 @@ wxIMPLEMENT_DYNAMIC_CLASS(wxSpinDoubleEvent, wxNotifyEvent);
 // other platforms (and maybe even determine it dynamically?).
 #ifdef __WXOSX__
 static const wxCoord MARGIN = 4;
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/spinctlg.cpp (W3.0P): no gap between the DOM text input and the spin button; tolerate a missing spin button in DoMoveWindow()
+#elif defined(__WXWASM__)
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9 used 0 for every platform): the wasm port's
+// text control and spin button are DOM elements drawn edge to edge.
+static const wxCoord MARGIN = 0;
 #else
 static const wxCoord MARGIN = 1;
 #endif
@@ -331,11 +336,17 @@ void wxSpinCtrlGenericBase::DoMoveWindow(int x, int y, int width, int height)
     // that the control should be. Normally, GetBestSize and GetSize should
     // always return the same value because the size of the spinButton never
     // changes.
-    wxSize sizeBtn = m_spinButton->GetBestSize();
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 
-    wxCoord wText = width - sizeBtn.x - MARGIN;
-    m_textCtrl->SetSize(0, 0, wText, height);
-    m_spinButton->SetSize(0 + wText + MARGIN, 0, wxDefaultCoord, height);
+    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+    if (m_spinButton)
+    {
+        wxSize sizeBtn = m_spinButton->GetBestSize();
+
+        wxCoord wText = width - sizeBtn.x - MARGIN;
+        m_textCtrl->SetSize(0, 0, wText, height);
+        m_spinButton->SetSize(0 + wText + MARGIN, 0, sizeBtn.x, height);
+    }
 }
 
 // ----------------------------------------------------------------------------

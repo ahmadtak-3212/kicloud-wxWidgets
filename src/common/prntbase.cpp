@@ -216,7 +216,8 @@ wxDialog *wxNativePrintFactory::CreatePrintSetupDialog( wxWindow *parent,
 
 wxDCImpl* wxNativePrintFactory::CreatePrinterDCImpl( wxPrinterDC *owner, const wxPrintData& data )
 {
-#if defined(__WXGTK__) || defined(__WXMOTIF__) || ( defined(__WXUNIVERSAL__) && !defined(__WXMAC__) )
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/prntbase.cpp (W3.0P): wxWASM prints through the PostScript DC like the other Unix ports
+#if defined(__WXGTK__) || defined(__WXMOTIF__) || defined(__WXWASM__) || ( defined(__WXUNIVERSAL__) && !defined(__WXMAC__) )
     return new wxPostScriptDCImpl( owner, data );
 #else
     return new wxPrinterDCImpl( owner, data );

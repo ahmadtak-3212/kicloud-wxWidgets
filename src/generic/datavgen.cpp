@@ -15,6 +15,11 @@
 
 #include "wx/dataview.h"
 
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/datavgen.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
+#ifdef __EMSCRIPTEN__
+    #include "wx/wasm/elementtracker.h"
+#endif
+
 #ifdef wxHAS_GENERIC_DATAVIEWCTRL
 
 #ifndef WX_PRECOMP
@@ -2533,6 +2538,12 @@ void wxDataViewMainWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
     dc.SetPen( *wxTRANSPARENT_PEN );
     dc.DrawRectangle(size);
 
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#ifdef __EMSCRIPTEN__
+    // Clear existing dataview elements before redrawing
+    WasmUnregisterRenderedElementsByParent(GetOwner());
+#endif
+
     if ( IsEmpty() )
     {
         // No items to draw.
@@ -2975,6 +2986,72 @@ void wxDataViewMainWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
         wxRendererNative::Get().DrawItemSelectionRect(this, dc, rect, wxCONTROL_SELECTED);
     }
 #endif // wxUSE_DRAG_AND_DROP
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+
+#ifdef __EMSCRIPTEN__
+    // Register each visible row for element tracking
+    unsigned int reg_line_start = first_line_start;
+    for (unsigned int item = item_start; item < item_last; item++)
+    {
+        const int line_height = GetLineHeight(item);
+        bool selected = m_selection.IsSelected(item);
+
+        // Get item text from first column as label
+        wxString itemText;
+        wxDataViewItem dataitem;
+        if (!IsVirtualList())
+        {
+            wxDataViewTreeNode *node = GetTreeNodeByRow(item);
+            if (node != NULL)
+            {
+                dataitem = node->GetItem();
+                wxVariant value;
+                model->GetValue(value, dataitem, 0);
+                // Handle wxDataViewIconText type (used by wxDataViewTreeStore)
+                if (value.GetType() == wxT("wxDataViewIconText"))
+                {
+                    wxDataViewIconText iconText;
+                    iconText << value;
+                    itemText = iconText.GetText();
+                }
+                else
+                {
+                    itemText = value.GetString();
+                }
+            }
+        }
+        else
+        {
+            dataitem = wxDataViewItem(wxUIntToPtr(item + 1));
+            wxVariant value;
+            model->GetValue(value, dataitem, 0);
+            // Handle wxDataViewIconText type (used by wxDataViewTreeStore)
+            if (value.GetType() == wxT("wxDataViewIconText"))
+            {
+                wxDataViewIconText iconText;
+                iconText << value;
+                itemText = iconText.GetText();
+            }
+            else
+            {
+                itemText = value.GetString();
+            }
+        }
+
+        if (itemText.IsEmpty())
+            itemText = wxString::Format("Row %u", item);
+
+        // Register the dataview row (rect is owner-relative)
+        wxWasmTrackElement(GetOwner(), "dataviewitem",
+                           selected ? "selected" : "row",
+                           static_cast<int>(item), itemText,
+                           wxString::Format("Row %u", item),
+                           wxRect(x_start, reg_line_start,
+                                  x_last - x_start, line_height));
+
+        reg_line_start += line_height;
+    }
+#endif
 }
 
 

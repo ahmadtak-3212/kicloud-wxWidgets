@@ -119,14 +119,22 @@ wxUniCharRef& wxUniCharRef::operator=(const wxUniChar& c)
         // compute positions of outstanding iterators for this string after the
         // replacement is done (there is only a small number of iterators at
         // any time, so we use an array on the stack to avoid unneeded
-        // allocation):
+        // KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/unichar.cpp (W3.0P): wxUniCharRef fixes up iterators through the per-thread lists (see include/wx/string.h)
+        // allocation); the per-thread node list holds iterators of ALL
+        // strings, so skip those pointing elsewhere -- both loops must use
+        // the same filter to keep the recorded positions paired up:
         static const size_t STATIC_SIZE = 32;
         size_t indexes_a[STATIC_SIZE];
         size_t *indexes = indexes_a;
         size_t iterNum = 0;
         wxStringIteratorNode *it;
-        for ( it = m_str.m_iterators.ptr; it; it = it->m_next, ++iterNum )
+        // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+        for ( it = wxStringIteratorNode::GetFirst(); it; it = it->m_next )
         {
+            // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+            if ( it->m_str != &m_str )
+                continue;
+
             wxASSERT( it->m_iter || it->m_citer );
 
             if ( iterNum == STATIC_SIZE )
@@ -147,7 +155,8 @@ wxUniCharRef& wxUniCharRef::operator=(const wxUniChar& c)
             if ( idx > posIdx )
                 idx += iterDiff;
 
-            indexes[iterNum] = idx;
+            // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+            indexes[iterNum++] = idx;
         }
 
         // update the string:
@@ -159,16 +168,23 @@ wxUniCharRef& wxUniCharRef::operator=(const wxUniChar& c)
 
         // finally, set the iterators to valid values again (note that this
         // updates m_pos as well):
-        size_t i;
-        for ( i = 0, it = m_str.m_iterators.ptr; it; it = it->m_next, ++i )
+        // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+        size_t i = 0;
+        for ( it = wxStringIteratorNode::GetFirst(); it; it = it->m_next )
         {
+            // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+            if ( it->m_str != &m_str )
+                continue;
+
             wxASSERT( i < iterNum );
             wxASSERT( it->m_iter || it->m_citer );
 
             if ( it->m_iter )
-                *it->m_iter = strimpl.begin() + indexes[i];
+                // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+                *it->m_iter = strimpl.begin() + indexes[i++];
             else // it->m_citer
-                *it->m_citer = strimpl.begin() + indexes[i];
+                // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+                *it->m_citer = strimpl.begin() + indexes[i++];
         }
 
         if ( indexes != indexes_a )

@@ -36,9 +36,11 @@ struct WXDLLIMPEXP_CORE wxNativeEncodingInfo
     wxString facename;          // may be empty meaning "any"
     wxFontEncoding encoding;    // so that we know what this struct represents
 
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/encinfo.h (W3.0P): wxWASM uses the facename/charset form of wxNativeEncodingInfo, like wxMSW/wxMac/wxQt */
 #if defined(__WXMSW__) || \
     defined(__WXMAC__) || \
-    defined(__WXQT__)
+    defined(__WXQT__) || \
+    defined(__WXWASM__)
 
     wxNativeEncodingInfo()
         : facename()

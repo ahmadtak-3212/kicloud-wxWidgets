@@ -1163,6 +1163,10 @@ void wxTrap()
     DebugBreak();
 #elif defined(_MSL_USING_MW_C_HEADERS) && _MSL_USING_MW_C_HEADERS
     Debugger();
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/appbase.cpp (W3.0P): wxTrap() cannot raise SIGTRAP in a browser; the assertion is already logged
+#elif defined(__EMSCRIPTEN__)
+    // In WASM, we can't break into a debugger and raise(SIGTRAP) crashes.
+    // The assertion message has already been logged, so just continue.
 #elif defined(__UNIX__)
     raise(SIGTRAP);
 #else

@@ -3255,6 +3255,11 @@ typedef const void* WXWidget;
 #include "wx/qt/defs.h"
 #endif
 
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/defs.h (W3.0P): WXWidget is an opaque pointer on wxWASM (DOM element handles live in JS) */
+#ifdef __WXWASM__
+typedef const void *WXWidget;
+#endif /* __WXWASM__ */
+
 /*  include the feature test macros */
 #include "wx/features.h"
 

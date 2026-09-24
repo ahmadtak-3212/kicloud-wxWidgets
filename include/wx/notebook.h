@@ -190,6 +190,9 @@ wxDECLARE_EXPORTED_EVENT( WXDLLIMPEXP_CORE, wxEVT_NOTEBOOK_PAGE_CHANGING, wxBook
     #include  "wx/osx/notebook.h"
 #elif defined(__WXQT__)
     #include "wx/qt/notebook.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/notebook.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+    #include  "wx/wasm/notebook.h"
 #endif
 
 // old wxEVT_COMMAND_* constants

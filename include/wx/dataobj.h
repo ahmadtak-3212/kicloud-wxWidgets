@@ -87,6 +87,9 @@ public:
     #include "wx/osx/dataform.h"
 #elif defined(__WXQT__)
     #include "wx/qt/dataform.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/dataobj.h (W3.0P): wxWASM data format/object dispatch; UTF-8 text data objects (the browser clipboard exchanges UTF-8) */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/dataform.h"
 #endif
 
 // the value for default argument to some functions (corresponds to
@@ -173,6 +176,9 @@ public:
     #include "wx/osx/dataobj.h"
 #elif defined(__WXQT__)
     #include "wx/qt/dataobj.h"
+/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/dataobj.h"
 #endif
 
 // ----------------------------------------------------------------------------
@@ -324,7 +330,13 @@ private:
 // ----------------------------------------------------------------------------
 
 #if wxUSE_UNICODE
-    #if defined(__WXGTK20__) || defined(__WXX11__) || defined(__WXQT__)
+/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
+    #if defined(__WXGTK20__) || defined(__WXX11__) || defined(__WXQT__) \
+            || defined(__WXWASM__)
+        // wasm: wxUSE_UNICODE_UTF8 build; src/wasm/clipbrd.cpp exchanges
+        // wxDF_UNICODETEXT data with the browser Clipboard API as UTF-8.
+        // Without this the default (wxChar) branch below served UTF-32,
+        // which the clipboard truncated at the first NUL byte.
         #define wxNEEDS_UTF8_FOR_TEXT_DATAOBJ
     #elif defined(__WXMAC__)
         #define wxNEEDS_UTF16_FOR_TEXT_DATAOBJ
@@ -585,6 +597,9 @@ private:
         #include "wx/osx/dataobj2.h"
     #elif defined(__WXQT__)
         #include "wx/qt/dataobj2.h"
+/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
+    #elif defined(__WXWASM__)
+        #include "wx/wasm/dataobj2.h"
     #endif
 
     // wxURLDataObject is simply wxTextDataObject with a different name

@@ -23,6 +23,11 @@
 
 #include "wx/headerctrl.h"
 
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/headerctrlg.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
+#ifdef __EMSCRIPTEN__
+    #include "wx/wasm/elementtracker.h"
+#endif
+
 #ifdef wxHAS_GENERIC_HEADERCTRL
 
 #include "wx/dcbuffer.h"
@@ -514,6 +519,14 @@ void wxHeaderCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
     wxAutoBufferedPaintDC dc(this);
     dc.Clear();
 
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: W3.0P (pcbjam@8bad5f58e9): clear the previous header element
+    // registrations (wasm test element registry); v3.2.11 folds the scroll
+    // offset into xpos instead of the device origin, so the tracked rects
+    // below are already in window coordinates.
+    WasmUnregisterRenderedElementsByParent(this);
+#endif
+
     int xpos = m_scrollOffset;
     for ( unsigned int i = 0; i < m_numColumns; i++ )
     {
@@ -577,6 +590,16 @@ void wxHeaderCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
                                     sortArrow,
                                     &params
                                 );
+
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#ifdef __EMSCRIPTEN__
+        // Register this column header for element tracking
+        wxWasmTrackElement(this, "columnheader",
+                           col.IsSortKey() ? "sortable" : "normal",
+                           static_cast<int>(idx), col.GetTitle(),
+                           wxEmptyString, wxRect(xpos, 0, colWidth, h),
+                           IsEnabled());
+#endif
 
         xpos += colWidth;
         if ( xpos > w )

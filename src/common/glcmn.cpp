@@ -89,6 +89,13 @@ bool wxGLCanvasBase::SetCurrent(const wxGLContext& context) const
 
 bool wxGLCanvasBase::SetColour(const wxString& colour)
 {
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/glcmn.cpp (W3.0P): WebGL has no fixed-function pipeline: wxGLAPI immediate-mode emulation is empty and SetColour() fails
+#ifdef __WXWASM__
+    // WebGL doesn't support legacy glColor/glIndex functions
+    // Modern applications should use shaders instead
+    wxUnusedVar(colour);
+    return false;
+#else
     wxColour col = wxTheColourDatabase->Find(colour);
     if ( !col.IsOk() )
         return false;
@@ -117,6 +124,8 @@ bool wxGLCanvasBase::SetColour(const wxString& colour)
     }
 #endif
     return true;
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#endif // __WXWASM__
 }
 
 wxGLCanvasBase::~wxGLCanvasBase()
@@ -377,6 +386,65 @@ bool wxGLCanvasBase::ParseAttribList(const int *attribList,
 // compatibility layer for OpenGL 3 and OpenGL ES
 // ============================================================================
 
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#ifdef __WXWASM__
+// WebGL doesn't support legacy OpenGL functions (glBegin/glEnd, glVertex,
+// glColor, etc.) or the fixed function pipeline. Modern applications should
+// use shaders instead. We provide empty stubs here for API compatibility.
+
+wxGLAPI::wxGLAPI()
+{
+}
+
+wxGLAPI::~wxGLAPI()
+{
+}
+
+void wxGLAPI::glFrustum(GLfloat WXUNUSED(left), GLfloat WXUNUSED(right),
+                        GLfloat WXUNUSED(bottom), GLfloat WXUNUSED(top),
+                        GLfloat WXUNUSED(zNear), GLfloat WXUNUSED(zFar))
+{
+    // Not supported in WebGL - use perspective matrix with shaders
+}
+
+void wxGLAPI::glBegin(GLenum WXUNUSED(mode))
+{
+    // Not supported in WebGL - use vertex buffers with shaders
+}
+
+void wxGLAPI::glTexCoord2f(GLfloat WXUNUSED(s), GLfloat WXUNUSED(t))
+{
+    // Not supported in WebGL - pass texture coords via vertex attributes
+}
+
+void wxGLAPI::glVertex3f(GLfloat WXUNUSED(x), GLfloat WXUNUSED(y), GLfloat WXUNUSED(z))
+{
+    // Not supported in WebGL - use vertex buffers
+}
+
+void wxGLAPI::glNormal3f(GLfloat WXUNUSED(nx), GLfloat WXUNUSED(ny), GLfloat WXUNUSED(nz))
+{
+    // Not supported in WebGL - pass normals via vertex attributes
+}
+
+void wxGLAPI::glColor4f(GLfloat WXUNUSED(r), GLfloat WXUNUSED(g),
+                        GLfloat WXUNUSED(b), GLfloat WXUNUSED(a))
+{
+    // Not supported in WebGL - pass colors via vertex attributes or uniforms
+}
+
+void wxGLAPI::glColor3f(GLfloat WXUNUSED(r), GLfloat WXUNUSED(g), GLfloat WXUNUSED(b))
+{
+    // Not supported in WebGL - pass colors via vertex attributes or uniforms
+}
+
+void wxGLAPI::glEnd()
+{
+    // Not supported in WebGL - draw with glDrawArrays/glDrawElements
+}
+
+#else // !__WXWASM__
+
 static wxGLAPI s_glAPI;
 
 #if wxUSE_OPENGL_EMULATION
@@ -600,6 +668,9 @@ void wxGLAPI::glEnd()
     ::glEnd();
 #endif
 }
+
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#endif // !__WXWASM__
 
 #endif // wxUSE_GLCANVAS
 

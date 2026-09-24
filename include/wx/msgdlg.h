@@ -294,8 +294,10 @@ private:
 
 #include "wx/generic/msgdlgg.h"
 
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/msgdlg.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
 #if defined(__WX_COMPILING_MSGDLGG_CPP__) || \
     defined(__WXUNIVERSAL__) || defined(__WXGPE__) || \
+    defined(__WXWASM__) || \
     (defined(__WXGTK__) && !defined(__WXGTK20__))
 
     #define wxMessageDialog wxGenericMessageDialog

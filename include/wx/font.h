@@ -640,6 +640,9 @@ WXDLLIMPEXP_CORE bool wxFromString(const wxString& str, wxFontBase* font);
     #include "wx/osx/font.h"
 #elif defined(__WXQT__)
     #include "wx/qt/font.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/font.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/font.h"
 #endif
 
 class WXDLLIMPEXP_CORE wxFontList: public wxGDIObjListBase

@@ -283,7 +283,8 @@ wxSaveFileSelector(const wxString& what,
                    wxWindow *parent = NULL);
 
 
-#if defined (__WXUNIVERSAL__)
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/filedlg.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#if defined (__WXUNIVERSAL__) || defined(__WXWASM__)
     #define wxHAS_GENERIC_FILEDIALOG
     #include "wx/generic/filedlgg.h"
 #elif defined(__WXMSW__)

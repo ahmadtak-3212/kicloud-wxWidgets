@@ -88,6 +88,9 @@ protected:
     #define wxHAS_BITMAPTOGGLEBUTTON
 #elif defined(__WXQT__)
     #include "wx/qt/tglbtn.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/tglbtn.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/tglbtn.h"
 #endif
 
 // old wxEVT_COMMAND_* constants

@@ -240,6 +240,9 @@ inline void wxMenuItemBase::SetText(const wxString& text) { SetItemLabel(text); 
     #include "wx/osx/menuitem.h"
 #elif defined(__WXQT__)
     #include "wx/qt/menuitem.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/menuitem.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/menuitem.h"
 #endif
 #endif // wxUSE_BASE_CLASSES_ONLY/!wxUSE_BASE_CLASSES_ONLY
 

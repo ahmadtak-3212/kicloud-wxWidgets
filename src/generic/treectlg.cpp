@@ -33,6 +33,11 @@
 #endif
 
 #include "wx/generic/treectlg.h"
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/treectlg.cpp (W3.0P): tighter indent/spacing, no dotted lines, and the wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
+
+#ifdef __EMSCRIPTEN__
+    #include "wx/wasm/elementtracker.h"
+#endif
 #include "wx/imaglist.h"
 #include "wx/itemattr.h"
 
@@ -981,8 +986,9 @@ void wxGenericTreeCtrl::Init()
     m_dirty = false;
 
     m_lineHeight = 10;
-    m_indent = 15;
-    m_spacing = 18;
+    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+    m_indent = 10;
+    m_spacing = 10;
 
     m_dragCount = 0;
     m_isDragging = false;
@@ -1081,7 +1087,8 @@ void wxGenericTreeCtrl::InitVisualAttributes()
     m_hilightBrush = wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT));
     m_hilightUnfocusedBrush = wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW));
 
-    m_dottedPen = wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT), 1, wxPENSTYLE_DOT);
+    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+    m_dottedPen = wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT), 1, wxPENSTYLE_TRANSPARENT);
 
 #if defined(__WXOSX__)
     m_normalFont = wxFont(wxOSX_SYSTEM_FONT_VIEWS);
@@ -2849,6 +2856,24 @@ wxGenericTreeCtrl::PaintLevel(wxGenericTreeItem *item,
         // draw
         PaintItem(item, dc);
 
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#ifdef __EMSCRIPTEN__
+        // Register tree item for element tracking
+        const char* subType;
+        if (item->IsExpanded())
+            subType = "expanded";
+        else if (item->HasPlus())
+            subType = "collapsed";
+        else
+            subType = "leaf";
+
+        // The Y position doubles as a unique index
+        wxWasmTrackElement(this, "treeitem", subType, item->GetY(),
+                           item->GetText(), wxEmptyString,
+                           wxRect(item->GetX(), item->GetY(),
+                                  item->GetWidth(), h));
+#endif
+
         if (HasFlag(wxTR_ROW_LINES))
         {
             dc.SetPen(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
@@ -3047,6 +3072,12 @@ void wxGenericTreeCtrl::OnPaint( wxPaintEvent &WXUNUSED(event) )
 
     if ( !m_anchor)
         return;
+
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#ifdef __EMSCRIPTEN__
+    // Clear existing tree elements before redrawing
+    WasmUnregisterRenderedElementsByParent(this);
+#endif
 
     dc.SetFont( m_normalFont );
     dc.SetPen( m_dottedPen );

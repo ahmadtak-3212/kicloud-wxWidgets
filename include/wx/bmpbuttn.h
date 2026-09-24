@@ -140,6 +140,9 @@ protected:
     #include "wx/osx/bmpbuttn.h"
 #elif defined(__WXQT__)
     #include "wx/qt/bmpbuttn.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/bmpbuttn.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/bmpbuttn.h"
 #endif
 
 #endif // wxUSE_BMPBUTTON

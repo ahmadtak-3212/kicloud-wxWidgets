@@ -79,8 +79,9 @@
 #endif
 
 /* Direct access to bitmap data is not implemented in all ports yet */
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/features.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
 #if defined(__WXGTK20__) || defined(__WXMAC__) || defined(__WXDFB__) || \
-        defined(__WXMSW__) || defined(__WXQT__)
+        defined(__WXMSW__) || defined(__WXQT__) || defined(__WXWASM__)
 
     /*
        HP aCC for PA-RISC can't deal with templates in wx/rawbmp.h.

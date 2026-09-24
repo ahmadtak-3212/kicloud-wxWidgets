@@ -87,6 +87,13 @@
     #include "wx/qt/dcmemory.h"
     #include "wx/qt/dcscreen.h"
 #endif
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/dcbase.cpp (W3.0P): wxWASM DC implementation headers for the DC factory
+
+#ifdef __WXWASM__
+    #include "wx/wasm/dcclient.h"
+    #include "wx/wasm/dcmemory.h"
+    #include "wx/wasm/dcscreen.h"
+#endif
 //----------------------------------------------------------------------------
 // wxDCFactory
 //----------------------------------------------------------------------------

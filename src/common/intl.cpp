@@ -391,7 +391,11 @@ bool wxLocale::DoCommonPostInit(bool success,
 {
     if ( !success )
     {
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/intl.cpp (W3.0P): no "Cannot set locale" warning under emscripten (musl has only C/C.UTF-8); keyed on __EMSCRIPTEN__ so wxBase is the same in the base-only and GUI builds
+#ifndef __EMSCRIPTEN__
         wxLogWarning(_("Cannot set locale to language \"%s\"."), name);
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#endif
 
         // As we failed to change locale, there is no need to restore the
         // previous one: it's still valid.

@@ -141,6 +141,9 @@ private:
     #include "wx/osx/slider.h"
 #elif defined(__WXQT__)
     #include "wx/qt/slider.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/slider.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/slider.h"
 #endif
 
 #endif // wxUSE_SLIDER

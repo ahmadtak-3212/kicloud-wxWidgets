@@ -83,6 +83,8 @@
 #endif
 
 #include <math.h>
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/wincmn.cpp (W3.0P): enabled state is managed by wx (DOM controls do not inherit it), and the asynchronous PopupMenu(callback) overload
+#include <functional>
 
 // Windows List
 WXDLLIMPEXP_DATA_CORE(wxWindowList) wxTopLevelWindows;
@@ -1190,6 +1192,12 @@ bool wxWindowBase::IsEnabled() const
     #undef wxHAS_NATIVE_ENABLED_MANAGEMENT
 #elif defined(__WXOSX__)
     // must do everything ourselves
+    #undef wxHAS_NATIVE_ENABLED_MANAGEMENT
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+#elif defined(__WXWASM__)
+    // DOM-backed controls are independent <button>/<input> nodes: nothing
+    // propagates an ancestor's enabled state to them (findings O-3 — a control
+    // created under a disabled frame stayed DOM-disabled for life).
     #undef wxHAS_NATIVE_ENABLED_MANAGEMENT
 #else
     #define wxHAS_NATIVE_ENABLED_MANAGEMENT
@@ -3067,15 +3075,31 @@ bool wxWindowBase::PopupMenu(wxMenu *menu, int x, int y)
 {
     wxCHECK_MSG( menu, false, "can't popup NULL menu" );
 
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+/*
     wxMenuInvokingWindowSetter
         setInvokingWin(*menu, static_cast<wxWindow *>(this));
+*/
+    menu->SetInvokingWindow(static_cast<wxWindow *>(this));
 
     wxCurrentPopupMenu = menu;
-    menu->UpdateUI();
+    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
     const bool rc = DoPopupMenu(menu, x, y);
-    wxCurrentPopupMenu = NULL;
+    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+    //wxCurrentPopupMenu = NULL;
 
     return rc;
+}
+
+// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
+void wxWindowBase::PopupMenu(wxMenu *menu, int x, int y, std::function<void (bool)> callback)
+{
+    wxCHECK_RET( menu, "can't popup NULL menu" );
+
+    menu->SetInvokingWindow(static_cast<wxWindow *>(this));
+
+    wxCurrentPopupMenu = menu;
+    DoPopupMenu(menu, x, y, callback);
 }
 
 // this is used to pass the id of the selected item from the menu event handler

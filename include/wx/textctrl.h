@@ -885,6 +885,9 @@ protected:
     #include "wx/osx/textctrl.h"
 #elif defined(__WXQT__)
     #include "wx/qt/textctrl.h"
+/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/textctrl.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
+#elif defined(__WXWASM__)
+    #include "wx/wasm/textctrl.h"
 #endif
 
 // ----------------------------------------------------------------------------
