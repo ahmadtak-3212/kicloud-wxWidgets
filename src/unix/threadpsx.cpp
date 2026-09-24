@@ -122,6 +122,19 @@ static const wxThread::ExitCode EXITCODE_CANCELLED = (wxThread::ExitCode)-1;
 static void ScheduleThreadForDeletion();
 static void DeleteThread(wxThread *This);
 
+#ifdef __EMSCRIPTEN__
+// KICLOUD: W3.1. Set by wxThreadInternal::PthreadStart() just before it calls
+// wxThread::Exit() at the end of the thread: Exit() then returns to it instead
+// of calling pthread_exit(). Emscripten's pthread_exit() marks the thread as
+// exited and wakes its joiner (which frees the thread's stack, TLS and pthread
+// block) before it unwinds the stack, so C++ cleanups still on the stack (the
+// wxThreadSpecificInfo scope guard in PthreadStart()) would run on freed
+// memory, possibly already reused by a new thread. Returning from the start
+// routine runs them first; emscripten then ends the thread with the returned
+// value, exactly as pthread_exit() would. See kicloud/docs/patches.md.
+static thread_local bool gs_exitReturnsToStart = false;
+#endif // __EMSCRIPTEN__
+
 // ----------------------------------------------------------------------------
 // private classes
 // ----------------------------------------------------------------------------
@@ -966,12 +979,23 @@ void *wxThreadInternal::PthreadStart(wxThread *thread)
     }
     else
     {
+#ifdef __EMSCRIPTEN__
+        // KICLOUD: W3.1. Let Exit() return here and end the thread by
+        // returning from its start routine (see gs_exitReturnsToStart). Read
+        // the exit code first: Exit() deletes a detached thread's objects.
+        const wxThread::ExitCode exitcode = pthread->m_exitcode;
+        gs_exitReturnsToStart = true;
+        thread->Exit(exitcode);
+
+        return exitcode;
+#else
         // terminate the thread
         thread->Exit(pthread->m_exitcode);
 
         wxFAIL_MSG(wxT("wxThread::Exit() can't return."));
 
         return NULL;
+#endif
     }
 }
 
@@ -1739,6 +1763,14 @@ void wxThread::Exit(ExitCode status)
     wxASSERT_MSG( This() == this,
                   wxT("wxThread::Exit() can only be called in the context of the same thread") );
 
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: W3.1, see gs_exitReturnsToStart. Only the end of PthreadStart()
+    // sets it; any other call (from Entry() or a cancellation handler) still
+    // ends the thread with pthread_exit().
+    const bool returnToStart = gs_exitReturnsToStart;
+    gs_exitReturnsToStart = false;
+#endif // __EMSCRIPTEN__
+
     if ( m_isDetached )
     {
         // from the moment we call OnExit(), the main program may terminate at
@@ -1776,6 +1808,12 @@ void wxThread::Exit(ExitCode status)
         m_internal->SetState(STATE_EXITED);
         m_critsect.Leave();
     }
+
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: W3.1, PthreadStart() returns the exit code itself.
+    if ( returnToStart )
+        return;
+#endif // __EMSCRIPTEN__
 
     // terminate the thread (pthread_exit() never returns)
     pthread_exit(status);
