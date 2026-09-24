@@ -1,0 +1,40 @@
+/////////////////////////////////////////////////////////////////////////////
+// Name:        wx/wasm/statbmp.h
+// Purpose:     wxStaticBitmap class declaration for the WASM DOM port
+// Licence:     wxWindows licence
+/////////////////////////////////////////////////////////////////////////////
+// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/statbmp.h (W3.0P; kicloud/docs/provenance.md)
+
+#ifndef __WX_WASM_STATBMP_H__
+#define __WX_WASM_STATBMP_H__
+
+class WXDLLIMPEXP_CORE wxStaticBitmap : public wxStaticBitmapBase
+{
+public:
+    wxStaticBitmap();
+    wxStaticBitmap(wxWindow *parent,
+                   wxWindowID id,
+                   const wxBitmapBundle& label,
+                   const wxPoint& pos = wxDefaultPosition,
+                   const wxSize& size = wxDefaultSize,
+                   long style = 0,
+                   const wxString& name = wxASCII_STR(wxStaticBitmapNameStr));
+
+    bool Create(wxWindow *parent,
+                wxWindowID id,
+                const wxBitmapBundle& label,
+                const wxPoint& pos = wxDefaultPosition,
+                const wxSize& size = wxDefaultSize,
+                long style = 0,
+                const wxString& name = wxASCII_STR(wxStaticBitmapNameStr));
+
+    virtual void SetBitmap(const wxBitmapBundle& bitmap) wxOVERRIDE;
+
+protected:
+    virtual wxSize DoGetBestSize() const wxOVERRIDE;
+
+private:
+    wxDECLARE_DYNAMIC_CLASS(wxStaticBitmap);
+};
+
+#endif // __WX_WASM_STATBMP_H__

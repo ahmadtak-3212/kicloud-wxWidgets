@@ -1,0 +1,140 @@
+/////////////////////////////////////////////////////////////////////////////
+// Name:        src/wasm/private.cpp
+// Purpose      wxWasm private classes
+// Author:      Adam Hilss
+// Copyright:   (c) 2022 Adam Hilss
+// Licence:     LGPL v2
+/////////////////////////////////////////////////////////////////////////////
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/display.cpp (W3.0P; kicloud/docs/provenance.md)
+
+#include "wx/wxprec.h"
+
+#ifndef WX_PRECOMP
+#include "wx/app.h"
+#endif // WX_PRECOMP
+
+#include "wx/display.h"
+#include "wx/private/display.h"
+#include "wx/wasm/private/display.h"
+
+#include <emscripten.h>
+#include <emscripten/html5.h>
+
+double GetDevicePixelRatio()
+{
+    return emscripten_get_device_pixel_ratio();
+}
+
+int GetScreenWidth()
+{
+    return EM_ASM_INT({
+        // Query DOM dynamically with fallback if mainWindow not ready
+        if (typeof mainWindow !== 'undefined' && mainWindow) {
+            return mainWindow.offsetWidth;
+        }
+        return 1280;  // Reasonable default fallback
+    });
+}
+
+int GetScreenHeight()
+{
+    return EM_ASM_INT({
+        // Query DOM dynamically with fallback if mainWindow not ready
+        if (typeof mainWindow !== 'undefined' && mainWindow) {
+            return mainWindow.offsetHeight;
+        }
+        return 720;  // Reasonable default fallback
+    });
+}
+
+// ===========================================================================
+// wxWasmDisplay
+// ===========================================================================
+
+wxWasmDisplay::wxWasmDisplay()
+    : m_screenSize(GetScreenWidth(), GetScreenHeight()),
+      m_deviceScaleFactor(GetDevicePixelRatio()),
+      m_contentScaleFactor(m_deviceScaleFactor >= 1.5 ? 2.0 : 1.0)
+{
+}
+
+wxSize wxWasmDisplay::GetScreenSize() const
+{
+    // Query DOM fresh each time instead of returning cached value.
+    // This matches how GTK/MSW ports work - they always query native APIs.
+    // Fixes the bug where GetClientSize() returns 20x20 if called before Show().
+    return wxSize(GetScreenWidth(), GetScreenHeight());
+}
+
+void wxWasmDisplay::UpdateScaleFactor()
+{
+    m_deviceScaleFactor = GetDevicePixelRatio();
+    m_contentScaleFactor = m_deviceScaleFactor >= 1.5 ? 2.0 : 1.0;
+}
+
+const int DEFAULT_DEPTH = 32;
+
+// ----------------------------------------------------------------------------
+// display characteristics
+// ----------------------------------------------------------------------------
+
+class wxDisplayImplSingleWasm : public wxDisplayImplSingle
+{
+public:
+    virtual wxRect GetGeometry() const wxOVERRIDE
+    {
+        wxSize screenSize = wxTheApp->GetDisplay()->GetScreenSize();
+        return wxRect(0, 0, screenSize.x, screenSize.y);
+    }
+
+    virtual int GetDepth() const wxOVERRIDE
+    {
+        return DEFAULT_DEPTH;
+    }
+
+    virtual wxSize GetPPI() const wxOVERRIDE
+    {
+        // CSS reference pixel size is 1/96 in
+        // see http://www.w3.org/TR/css3-values/#reference-pixel
+        const double ppi = 96.0;
+        return wxSize(ppi, ppi);
+    }
+};
+
+double wxDisplayScaleFactor()
+{
+    return wxTheApp->GetDisplay()->GetDeviceScaleFactor();
+}
+
+double wxContentScaleFactor()
+{
+    return wxTheApp->GetDisplay()->GetContentScaleFactor();
+}
+
+class wxDisplayFactorySingleWasm : public wxDisplayFactorySingle
+{
+public:
+    // The base implementation bails out with wxNOT_FOUND for windows whose
+    // GetHandle() is null — which in this port is EVERY window (wxWindowWasm
+    // has no native handle; windows are DOM-backed). Callers persisting window
+    // geometry (e.g. KiCad's SaveWindowSettings) then store display = -1 and
+    // their restore path treats the position as invalid and re-centres the
+    // frame on every reopen. There is exactly one display here, so any window
+    // that exists is on display 0.
+    virtual int GetFromWindow(const wxWindow *window) wxOVERRIDE
+    {
+        return window ? 0 : wxNOT_FOUND;
+    }
+
+protected:
+    virtual wxDisplayImpl *CreateSingleDisplay()
+    {
+        return new wxDisplayImplSingleWasm();
+    }
+};
+
+wxDisplayFactory *wxDisplay::CreateFactory()
+{
+    return new wxDisplayFactorySingleWasm();
+}
+

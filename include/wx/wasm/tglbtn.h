@@ -1,0 +1,72 @@
+/////////////////////////////////////////////////////////////////////////////
+// Name:        wx/wasm/tglbtn.h
+// Purpose:     wxToggleButton class declaration for the WASM DOM port
+// Licence:     wxWindows licence
+/////////////////////////////////////////////////////////////////////////////
+// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/tglbtn.h (W3.0P; kicloud/docs/provenance.md)
+
+#ifndef __WX_WASM_TGLBTN_H__
+#define __WX_WASM_TGLBTN_H__
+
+class WXDLLIMPEXP_CORE wxToggleButton : public wxToggleButtonBase
+{
+public:
+    wxToggleButton();
+    wxToggleButton(wxWindow *parent,
+                   wxWindowID id,
+                   const wxString& label,
+                   const wxPoint& pos = wxDefaultPosition,
+                   const wxSize& size = wxDefaultSize,
+                   long style = 0,
+                   const wxValidator& validator = wxDefaultValidator,
+                   const wxString& name = wxASCII_STR(wxCheckBoxNameStr));
+
+    bool Create(wxWindow *parent,
+                wxWindowID id,
+                const wxString& label,
+                const wxPoint& pos = wxDefaultPosition,
+                const wxSize& size = wxDefaultSize, long style = 0,
+                const wxValidator& validator = wxDefaultValidator,
+                const wxString& name = wxASCII_STR(wxCheckBoxNameStr));
+
+    virtual void SetValue(bool state) wxOVERRIDE;
+    virtual bool GetValue() const wxOVERRIDE;
+
+    virtual void SetLabel(const wxString& label) wxOVERRIDE;
+
+    // wxEVT_TOGGLEBUTTON from the real aria-pressed <button>'s click
+    virtual void OnDomEvent(wxDomEventKind kind) wxOVERRIDE;
+
+private:
+    // Cached pressed state, kept in sync with the element's aria-pressed.
+    bool m_value;
+
+    wxDECLARE_DYNAMIC_CLASS(wxToggleButton);
+};
+
+class WXDLLIMPEXP_CORE wxBitmapToggleButton : public wxToggleButton
+{
+public:
+    wxBitmapToggleButton();
+    wxBitmapToggleButton(wxWindow *parent,
+                         wxWindowID id,
+                         const wxBitmapBundle& label,
+                         const wxPoint& pos = wxDefaultPosition,
+                         const wxSize& size = wxDefaultSize,
+                         long style = 0,
+                         const wxValidator& validator = wxDefaultValidator,
+                         const wxString& name = wxASCII_STR(wxCheckBoxNameStr));
+
+    bool Create(wxWindow *parent,
+                wxWindowID id,
+                const wxBitmapBundle& label,
+                const wxPoint& pos = wxDefaultPosition,
+                const wxSize& size = wxDefaultSize, long style = 0,
+                const wxValidator& validator = wxDefaultValidator,
+                const wxString& name = wxASCII_STR(wxCheckBoxNameStr));
+
+private:
+    wxDECLARE_DYNAMIC_CLASS(wxBitmapToggleButton);
+};
+
+#endif // __WX_WASM_TGLBTN_H__

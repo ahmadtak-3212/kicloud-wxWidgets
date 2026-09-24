@@ -1,0 +1,103 @@
+/////////////////////////////////////////////////////////////////////////////
+// Name:        wx/wasm/app.h
+// Purpose:     wxApp class
+// Author:      Adam Hilss
+// Copyright:   (c) 2022 Adam Hilss
+// Licence:     LGPL v2
+/////////////////////////////////////////////////////////////////////////////
+// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/app.h (W3.0P; kicloud/docs/provenance.md)
+
+#ifndef _WX_WASM_APP_H_
+#define _WX_WASM_APP_H_
+
+#include "wx/event.h"
+#include "wx/hashset.h"
+#include "wx/kbdstate.h"
+#include "wx/mousestate.h"
+#include "wx/timer.h"
+
+class EmscriptenKeyboardEvent;
+class wxWasmDisplay;
+
+//-----------------------------------------------------------------------------
+// wxApp
+//-----------------------------------------------------------------------------
+
+class WXDLLIMPEXP_CORE wxApp: public wxAppBase
+{
+public:
+    wxApp();
+    virtual ~wxApp();
+
+#if wxUSE_EXCEPTIONS
+    // Browser-port contract: an exception escaping an event handler must NOT
+    // tear down the app (the base default exits the main loop, which in the
+    // browser reads as a silent clean shutdown mid-session). Parity with the
+    // pre-EH builds, where the throw escaped to the JS dispatch boundary and
+    // was contained there. Surface it, keep running.
+    virtual bool OnExceptionInMainLoop() wxOVERRIDE;
+#endif
+
+    // deferGLCanvasWindows: skip a synchronous repaint of any non-main window hosting a
+    // wxGLCanvas (the 3D viewer, whose paint runs the multi-threaded CPU raytracer). Used
+    // on the mouse-button repaint path (HandleMouseEvent), which is driven synchronously
+    // from a DOM event callback where the raytracer's Worker boot would deadlock — the
+    // window keeps NeedsPaint() and is repainted by the yielding per-frame pump instead.
+    void Paint(bool deferGLCanvasWindows = false);
+
+    bool IsKeyPressed(long keyCode);
+
+    void GetMousePosition(int *x, int *y);
+    void GetMouseState(wxMouseState *mouseState);
+    // Update the cached mouse position. The browser cannot move the OS pointer,
+    // so wxWindow::WarpPointer() calls this to keep wxGetMousePosition() in sync
+    // with a programmatic warp (matching desktop, where the real pointer moves).
+    void SetMousePosition(const wxPoint& screenPos);
+    wxWindow *GetMouseWindow(const wxPoint& position) const;
+
+    // Internal use only
+    wxWasmDisplay* GetDisplay() { return m_display; }
+
+    // Clears the parked-motion coalescing flag before the base drain, so
+    // the next motion that arrives while a chain is parked is queued again
+    // (see HandleMouseEvent's parked branch).
+    virtual void ProcessPendingEvents() wxOVERRIDE;
+
+    bool HandleKeyEvent(wxKeyEvent *event);
+    void HandleMouseEvent(wxMouseEvent *event);
+    void HandleMouseWheelEvent(wxMouseEvent *event);
+    void HandleSizeEvent(const wxSizeEvent& event);
+    void HandleActivateEvent(wxActivateEvent *event);
+    void HandleCloseEvent(wxCloseEvent* event);
+
+protected:
+    void SetKeyPressed(long keyCode, bool pressed);
+
+    void SendMouseEventToWindow(wxMouseEvent *event, wxWindow *window);
+
+    void UpdateMouseState(const wxMouseEvent& event);
+    void UpdateMouseState(const wxKeyEvent& event);
+
+private:
+    wxDECLARE_DYNAMIC_CLASS(wxApp);
+
+    // Display
+    wxWasmDisplay *m_display; 
+
+    // Keyboard
+    WX_DECLARE_HASH_SET(long, wxIntegerHash, wxIntegerEqual, KeyCodeSet);
+    KeyCodeSet m_keyCodeSet;
+
+    // Mouse
+    wxMouseState m_mouseState;
+
+    // True while ONE wxEVT_MOTION has been queued for a parked dispatch
+    // chain and no ProcessPendingEvents() drain has run since (motion is
+    // coalesced while parked; buttons are queued 1:1). Self-healing: every
+    // drain clears it, not the event's consumption.
+    bool m_parkedMotionQueued;
+
+    friend class wxDropSource;
+};
+
+#endif // _WX_WASM_APP_H_

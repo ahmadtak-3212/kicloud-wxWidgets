@@ -1,0 +1,94 @@
+/////////////////////////////////////////////////////////////////////////////
+// Name:        src/wasm/stattext.cpp
+// Purpose:     wxStaticText implementation for the WASM DOM port
+// Licence:     wxWindows licence
+/////////////////////////////////////////////////////////////////////////////
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/stattext.cpp (W3.0P; kicloud/docs/provenance.md)
+
+// For compilers that support precompilation, includes "wx.h".
+#include "wx/wxprec.h"
+
+#if wxUSE_STATTEXT
+
+#include "wx/stattext.h"
+
+#include "wx/wasm/private/dom.h"
+
+wxStaticText::wxStaticText()
+{
+}
+
+wxStaticText::wxStaticText(wxWindow *parent,
+                           wxWindowID id,
+                           const wxString& label,
+                           const wxPoint& pos,
+                           const wxSize& size,
+                           long style,
+                           const wxString& name)
+{
+    Create(parent, id, label, pos, size, style, name);
+}
+
+bool wxStaticText::Create(wxWindow *parent,
+                          wxWindowID id,
+                          const wxString& label,
+                          const wxPoint& pos,
+                          const wxSize& size,
+                          long style,
+                          const wxString& name)
+{
+    if (!wxControl::Create(parent, id, pos, size, style, wxDefaultValidator, name))
+        return false;
+
+    WasmCreateDomNode("span");
+
+    // An ellipsized label (wxST_ELLIPSIZE_*) is first truncated by SetLabel()
+    // against the control's initial — often near-zero — client size, before any
+    // sizer has assigned it a real width. Re-ellipsize on every resize so the
+    // text expands once the (e.g. growable-column) width is known. This mirrors
+    // the native ports, which call UpdateLabel() on size changes.
+    Bind(wxEVT_SIZE, &wxStaticText::OnSize, this);
+
+    SetLabel(label);
+
+    return true;
+}
+
+void wxStaticText::OnSize(wxSizeEvent& event)
+{
+    // UpdateLabel() recomputes GetEllipsizedLabel() against the current client
+    // size and pushes it through WXSetVisibleLabel(). It is a no-op when the
+    // control is not ellipsized or when the ellipsized text is unchanged, so it
+    // neither touches plain labels nor feeds back into the layout (the best size
+    // is fixed and only the DOM text changes).
+    UpdateLabel();
+    event.Skip();
+}
+
+void wxStaticText::SetLabel(const wxString& label)
+{
+    if (label == m_labelOrig)
+        return;
+
+    // stores m_labelOrig and invalidates the best size
+    wxControl::SetLabel(label);
+
+    WXSetVisibleLabel(GetEllipsizedLabel());
+
+    AutoResizeIfNecessary();
+}
+
+wxString wxStaticText::WXGetVisibleLabel() const
+{
+    return m_visibleLabel;
+}
+
+void wxStaticText::WXSetVisibleLabel(const wxString& str)
+{
+    m_visibleLabel = str;
+
+    if (WasmGetDomId())
+        wxDomSetText(WasmGetDomId(), m_visibleLabel);
+}
+
+#endif // wxUSE_STATTEXT
