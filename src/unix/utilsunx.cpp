@@ -62,6 +62,9 @@
 #include "wx/filename.h"
 
 #include <pwd.h>
+#ifdef __EMSCRIPTEN__
+    #include <emscripten.h> // KICLOUD: W3.0P, emscripten_run_script_string()
+#endif
 #include <sys/wait.h>       // waitpid()
 
 #ifdef HAVE_SYS_SELECT_H
@@ -1109,6 +1112,104 @@ bool wxGetUserName(wxChar *buf, int sz)
 #endif // HAVE_PW_GECOS/!HAVE_PW_GECOS
 }
 
+// KICLOUD: adapted from pcbjam@8bad5f58e9:src/unix/utilsunx.cpp (W3.0P): under
+// emscripten there is no uname process to run (wxExecute fails and logs an
+// error on every call, e.g. from the keyboard/mouse code asking for wxOS_MAC),
+// so the OS functions below come from the browser. PCBJam moved them into its
+// wxcore (src/wasm/utils.cpp); they are wxBase functions, so here they stay in
+// wxBase, keyed on __EMSCRIPTEN__ (the same in the base-only and GUI builds,
+// src/wasm/README.md), and work without the port's JavaScript too (Node).
+#ifdef __EMSCRIPTEN__
+
+namespace
+{
+
+// navigator.userAgent, or an empty string where there is none.
+wxString wxEmscriptenUserAgent()
+{
+    const char* ua = emscripten_run_script_string(
+        "(typeof navigator !== 'undefined' && navigator.userAgent) ? String(navigator.userAgent) : ''");
+    return wxString::FromUTF8(ua ? ua : "");
+}
+
+// The text after `key` up to the next ';' or ')' (e.g. the version after "Windows NT ").
+wxString wxEmscriptenUAField(const wxString& ua, const wxString& key)
+{
+    const int pos = ua.Find(key);
+    if ( pos == wxNOT_FOUND )
+        return wxString();
+    wxString rest = ua.Mid(pos + key.length());
+    return rest.BeforeFirst(';').BeforeFirst(')').Trim().Trim(false);
+}
+
+} // anonymous namespace
+
+bool wxIsPlatform64Bit()
+{
+    return false; // wasm32
+}
+
+wxString wxGetCpuArchitectureName()
+{
+    return wxT("wasm32");
+}
+
+wxOperatingSystemId wxGetOsVersion(int *verMaj, int *verMin, int *verMicro)
+{
+    const wxString ua = wxEmscriptenUserAgent();
+    wxOperatingSystemId id = wxOS_UNKNOWN;
+    wxString version;
+    if ( ua.Contains(wxT("Windows NT")) )
+    {
+        id = wxOS_WINDOWS_NT;
+        version = wxEmscriptenUAField(ua, wxT("Windows NT "));
+    }
+    else if ( ua.Contains(wxT("Mac OS X")) || ua.Contains(wxT("Macintosh")) )
+    {
+        id = wxOS_MAC_OSX_DARWIN;
+        version = wxEmscriptenUAField(ua, wxT("Mac OS X "));
+        version.Replace(wxT("_"), wxT("."));
+    }
+    else if ( ua.Contains(wxT("CrOS")) )
+        id = wxOS_CHROME_OS;
+    else if ( ua.Contains(wxT("Linux")) || ua.Contains(wxT("X11")) )
+        id = wxOS_UNIX_LINUX;
+
+    int major = -1, minor = -1, micro = -1;
+    if ( !version.empty() )
+    {
+        if ( wxSscanf(version.c_str(), wxT("%d.%d.%d"), &major, &minor, &micro) < 2 )
+            major = minor = micro = -1;
+        else if ( micro < 0 )
+            micro = 0;
+    }
+    if ( verMaj )
+        *verMaj = major;
+    if ( verMin )
+        *verMin = minor;
+    if ( verMicro )
+        *verMicro = micro;
+    return id;
+}
+
+wxString wxGetOsDescription()
+{
+    const wxString ua = wxEmscriptenUserAgent();
+    return ua.empty() ? wxString(wxT("WebAssembly (Emscripten)")) : ua;
+}
+
+bool wxCheckOsVersion(int majorVsn, int minorVsn, int microVsn)
+{
+    int majorCur, minorCur, microCur;
+    wxGetOsVersion(&majorCur, &minorCur, &microCur);
+
+    return majorCur > majorVsn
+        || (majorCur == majorVsn && minorCur >= minorVsn)
+        || (majorCur == majorVsn && minorCur == minorVsn && microCur >= microVsn);
+}
+
+#else // !__EMSCRIPTEN__
+
 bool wxIsPlatform64Bit()
 {
 #if SIZEOF_VOID_P == 8
@@ -1128,6 +1229,8 @@ wxString wxGetCpuArchitectureName()
 {
     return wxGetCommandOutput(wxT("uname -m"));
 }
+
+#endif // __EMSCRIPTEN__ / !__EMSCRIPTEN__
 
 wxString wxGetNativeCpuArchitectureName()
 {
@@ -1209,7 +1312,8 @@ wxLinuxDistributionInfo wxGetLinuxDistributionInfo()
 #endif // __LINUX__
 
 // these functions are in src/osx/utils_base.mm for wxOSX.
-#ifndef __DARWIN__
+// KICLOUD: W3.0P: and above, in the __EMSCRIPTEN__ block, for WebAssembly.
+#if !defined(__DARWIN__) && !defined(__EMSCRIPTEN__)
 
 wxOperatingSystemId wxGetOsVersion(int *verMaj, int *verMin, int *verMicro)
 {
@@ -1278,7 +1382,7 @@ bool wxCheckOsVersion(int majorVsn, int minorVsn, int microVsn)
         || (majorCur == majorVsn && minorCur == minorVsn && microCur >= microVsn);
 }
 
-#endif // !__DARWIN__
+#endif // !__DARWIN__ && !__EMSCRIPTEN__
 
 unsigned long wxGetProcessId()
 {
