@@ -39,8 +39,8 @@
 // functions, while this file is compiled into wxcore: a base-only consumer of a
 // GUI build (test_base, a console program) would not link, and the base library
 // would differ between the base-only and the GUI configuration (src/wasm/README.md).
-// They stay in wxBase (src/unix/utilsunx.cpp) for now; their browser versions
-// belong to kicloud W3.2 (wxBase platform services).
+// Their browser versions (from the user agent) live in wxBase instead, in
+// src/unix/utilsunx.cpp under __EMSCRIPTEN__ (kicloud/docs/patches.md).
 
 wxBrowserInfo wxGetBrowserInfo()
 {

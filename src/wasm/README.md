@@ -61,6 +61,9 @@ wxxml); `--gui on` builds every library with this toolkit (kicloud W3.1b).
   a `KICLOUD: adapted from <repo>@<commit>:<path>` line and a row in
   `kicloud/docs/provenance.md`. Adapted port code is LGPL v2 without the
   wxWindows exception; wholly original files may use the wxWindows Licence.
+  One exception: `js/scheduler.js` comes from PCBJam's main repository
+  (`scripts/common/shims/jspi-scheduler.js`), which is GPL-3.0; it keeps that
+  licence (kicloud ADR 0005; the combined browser application is GPLv3).
 
 ## Pages that host the port
 
@@ -71,6 +74,23 @@ a global `mainWindow` (the display size). The JSPI promising exports (DOM/mouse
 events, window move/close/resize, the scheduler ticks) are marked
 `KICLOUD-JSPI-EXPORT` and reach `-sJSPI_EXPORTS` through
 `kicloud/toolchain/jspi-exports.txt`. See `kicloud/tests/wx/smoke/`.
+
+Link: `wx-config --libs` prints the three `--pre-js` runtime files and the
+archives, and no `-s` setting. The emscripten runtime pieces the JavaScript
+uses (`ccall`, `stackSave`/`stackRestore`, the `HEAP*` views, ...) are declared
+with `EM_JS_DEPS` in `app.cpp`, and the JavaScript calls the glue's in-scope
+names, so a program may set its own `EXPORTED_RUNTIME_METHODS` and similar
+list settings.
+
+Browser entries (TODO.md E2.1/E2.2): the html5 callbacks registered in
+`app.cpp` (keyboard, mouse, wheel, touch, window resize, window focus/blur)
+are plain entries that cannot suspend, so they only package the event and hand
+it to the scheduler as a DOM job (`wxWasmRunDomJob`), which runs wx handlers on
+a promising activation. `beforeunload` runs no wx code at all: the page asks
+the browser to confirm leaving while any top-level window is marked modified
+with `wxTopLevelWindow::OSXSetModified(true)` (published to
+`globalThis.__wxModifiedWindows`); a program that wants the prompt keeps that
+flag current. No `wxEVT_CLOSE_WINDOW` is sent when the page unloads.
 
 ## Status
 
