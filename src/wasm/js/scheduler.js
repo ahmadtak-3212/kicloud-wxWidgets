@@ -1,4 +1,8 @@
 // KICLOUD: adapted from pcbjam@1301a01:scripts/common/shims/jspi-scheduler.js (W3.0P, moved from scripts/common/shims/jspi-scheduler.js; kicloud/docs/provenance.md)
+// KICLOUD: W3.0P (TODO.md W3.0P ABI bullet): this --pre-js file calls the glue's in-scope
+// KICLOUD: stackSave/stackRestore (Module.<name> stays the fallback for other hosts, as for
+// KICLOUD: _malloc/_free below): PCBJam's -sEXPORTED_RUNTIME_METHODS link setting is gone;
+// KICLOUD: src/wasm/app.cpp declares them with EM_JS_DEPS, so every wxApp program gets them.
 // jspi-scheduler.js — the wx scheduler shim for the JSPI runtime.
 //
 // Ships as a --pre-js. Provides the S4 token-wait registry
@@ -434,8 +438,8 @@
     _windowLive: null,    // record whose RESUMED window is executing (or armed)
     _resumeReady: [],     // FIFO of {rec, gate} whose wait promise resolved
 
-    _sp: function () { return Module["stackSave"](); },
-    _setSp: function (v) { Module["stackRestore"](v); },
+    _sp: function () { return (typeof stackSave === "function" ? stackSave : Module["stackSave"])(); },
+    _setSp: function (v) { (typeof stackRestore === "function" ? stackRestore : Module["stackRestore"])(v); },
 
     _top: function () {
       return this._actStack.length

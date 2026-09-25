@@ -39,6 +39,18 @@ extern "C" void wxWasmRunOnDispatchContext(void (*fn)(void *), void *arg);
 #include <string>
 #include <emscripten/html5.h>
 
+// KICLOUD: W3.0P (TODO.md W3.0P ABI bullet: no PCBJam link flag may leak in): the
+// emscripten runtime pieces the port's JavaScript uses - the --pre-js runtime
+// (src/wasm/js/wx.js, wx-dom.js, scheduler.js: ccall, stackSave/stackRestore,
+// HEAP8/HEAPU8/HEAP32, stringToUTF8, FS; _malloc is exported for stringToNewUTF8)
+// and the EM_JS code of wx/wasm/private/dom.h (stringToNewUTF8). PCBJam put
+// -sEXPORTED_RUNTIME_METHODS=ccall,HEAP8,HEAPU8,HEAP32,stackSave,stackRestore and
+// -sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=$stringToNewUTF8 on every program's link line;
+// emcc keeps only the last value of such a list setting, so a program that sets its
+// own list silently lost them. Declared here they are linked whenever wxApp is, and
+// the JavaScript calls the glue's in-scope names instead of Module.<name>.
+EM_JS_DEPS(wxwasm_runtime, "$ccall,$stackSave,$stackRestore,$stringToNewUTF8,$stringToUTF8,$FS,$HEAP8,$HEAPU8,$HEAP32");
+
 void RegisterEmscriptenCallbacks(wxApp* app);
 
 // WASM-specific logger that outputs to browser console

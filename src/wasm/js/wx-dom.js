@@ -1,4 +1,8 @@
 // KICLOUD: adapted from pcbjam@8bad5f58e9:build/wasm/wx-dom.js (W3.0P, moved from build/wasm/wx-dom.js; kicloud/docs/provenance.md)
+// KICLOUD: W3.0P (TODO.md W3.0P ABI bullet): this --pre-js file calls the glue's in-scope
+// KICLOUD: runtime names (ccall) instead of Module.<name>: PCBJam's
+// KICLOUD: -sEXPORTED_RUNTIME_METHODS link setting is gone; src/wasm/app.cpp declares them
+// KICLOUD: with EM_JS_DEPS, so every program that links wxApp gets them.
 // wx-dom.js — shim additions for the WASM DOM port (non-universal build).
 //
 // Loaded as a second --pre-js AFTER wx.js, only in DOM-port bundles.
@@ -104,13 +108,13 @@
       // Surfaces in test logs; must never throw back into DOM event handlers.
       console.error('wx_dom_event(' + domId + ',' + kind + ') failed:', e);
       try {
-        Module['ccall']('wx_dispatch_abandon', null, [], []);
+        ccall('wx_dispatch_abandon', null, [], []);
       } catch (e2) {
         /* nothing else to do - the runtime is already in trouble */
       }
     };
     try {
-      var p = Module['ccall']('wx_dom_event', null, ['number', 'number'], [domId, kind]);
+      var p = ccall('wx_dom_event', null, ['number', 'number'], [domId, kind]);
       // JSPI: wx_dom_event is a PROMISING export — a throwing handler
       // surfaces as an async REJECTION of the returned promise, which the
       // sync catch below can never see.
@@ -1667,7 +1671,7 @@
     var mods = (ev.ctrlKey ? 1 : 0) | (ev.shiftKey ? 2 : 0) |
                (ev.altKey ? 4 : 0) | (ev.metaKey ? 8 : 0);
     try {
-      return Module['ccall']('wx_dom_mouse', 'number',
+      return ccall('wx_dom_mouse', 'number',
         ['number', 'number', 'number', 'number',
          'number', 'number', 'number', 'number'],
         [kind,
