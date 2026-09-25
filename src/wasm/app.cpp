@@ -1054,6 +1054,48 @@ void wxWasmRunKeyJob(void *arg)
     wxWasmFinishDomJob(job);
 }
 
+// KICLOUD: W3.0P (TODO.md E2.1/E2.2, Part F.4; kicloud W3.0P lens 2): the window
+// 'resize' and 'focus'/'blur' html5 callbacks ran HandleSizeEvent /
+// HandleActivateEvent synchronously on their plain (non-promising) entry, so a
+// wxEVT_SIZE or wxEVT_ACTIVATE handler that reached a wait (a modal, a yield)
+// died with SuspendError. They now hand their work to the scheduler as DOM jobs,
+// like the key/mouse/wheel/touch callbacks above.
+struct wxWasmSizeJob : wxWasmDomJob
+{
+    wxSize size;
+};
+
+// A resize storm (dragging the browser window) queues at most one job: later
+// callbacks update the queued job's size, which it reads when it runs.
+wxWasmSizeJob *wxWasmQueuedSizeJob = NULL;
+
+void wxWasmRunSizeJob(void *arg)
+{
+    wxWasmSizeJob *job = static_cast<wxWasmSizeJob *>(arg);
+    if (wxWasmQueuedSizeJob == job)
+        wxWasmQueuedSizeJob = NULL;
+
+    wxSizeEvent event(job->size);
+    job->app->HandleSizeEvent(event);
+
+    wxWasmFinishDomJob(job);
+}
+
+struct wxWasmActivateJob : wxWasmDomJob
+{
+    bool active = false;
+};
+
+void wxWasmRunActivateJob(void *arg)
+{
+    wxWasmActivateJob *job = static_cast<wxWasmActivateJob *>(arg);
+
+    wxActivateEvent event(wxEVT_ACTIVATE, job->active);
+    job->app->HandleActivateEvent(&event);
+
+    wxWasmFinishDomJob(job);
+}
+
 }  // namespace
 
 // A keydown whose browser default (if any) is harmless and whose 'keypress'
@@ -1288,9 +1330,22 @@ EM_BOOL ResizeCallback(int WXUNUSED(eventType),
         return mainWindow.offsetTop;
     });
     wxSize size(emscriptenEvent->windowInnerWidth, emscriptenEvent->windowInnerHeight - offset);
-    wxSizeEvent event(size);
 
-    app->HandleSizeEvent(event);
+    // KICLOUD: W3.0P (E2.1/E2.2): wxEVT_SIZE handlers run on a promising
+    // activation (a DOM job, see wxWasmRunSizeJob), never on this plain entry.
+    if (wxWasmQueuedSizeJob != NULL)
+    {
+        wxWasmQueuedSizeJob->size = size;   // still queued: it takes the newest size
+        return true;
+    }
+
+    wxWasmSizeJob* job = new wxWasmSizeJob();
+    job->app = app;
+    job->size = size;
+    wxWasmQueuedSizeJob = job;
+
+    if (wxWasmRunDomJob(&wxWasmRunSizeJob, job))
+        delete job;
 
     return true;
 }
@@ -1302,25 +1357,29 @@ EM_BOOL FocusCallback(int eventType,
     //printf("FocusCallback\n");
     wxApp* app = static_cast<wxApp*>(userData);
 
-    wxActivateEvent event(wxEVT_ACTIVATE, eventType == EMSCRIPTEN_EVENT_FOCUS);
-    app->HandleActivateEvent(&event);
+    // KICLOUD: W3.0P (E2.1/E2.2): wxEVT_ACTIVATE handlers run on a promising
+    // activation (a DOM job, see wxWasmRunActivateJob), never on this plain entry.
+    wxWasmActivateJob* job = new wxWasmActivateJob();
+    job->app = app;
+    job->active = (eventType == EMSCRIPTEN_EVENT_FOCUS);
+
+    if (wxWasmRunDomJob(&wxWasmRunActivateJob, job))
+        delete job;
 
     return true;
 }
 
-const char *UnloadCallback(int WXUNUSED(eventType),
-                           const void *WXUNUSED(emscriptenEvent),
-                           void *userData)
-{
-    //printf("UnloadCallback\n");
-    wxApp* app = static_cast<wxApp*>(userData);
-
-    wxCloseEvent event(wxEVT_CLOSE_WINDOW);
-    event.SetCanVeto(true);
-    app->HandleCloseEvent(&event);
-
-    return event.GetVeto() ? "veto" : "";
-}
+// KICLOUD: W3.0P (E2.2; kicloud W3.0P lens 2): PCBJam's UnloadCallback sent
+// wxEVT_CLOSE_WINDOW synchronously from the 'beforeunload' html5 callback. A
+// close handler that asks "Save changes?" with a modal cannot suspend there
+// (SuspendError), a handler that does not veto destroyed the app while the user
+// might still choose to stay, and nothing queued can be relied on because the
+// page may be gone before it runs. The browser needs its answer synchronously,
+// so it is decided in JS from state wasm has published: RegisterEmscriptenCallbacks
+// installs a 'beforeunload' listener that asks the browser to confirm leaving
+// while any top-level window is marked modified (wxTopLevelWindow::OSXSetModified,
+// published by src/wasm/toplevel.cpp into globalThis.__wxModifiedWindows). No wx
+// code runs on 'beforeunload'.
 
 }
 
@@ -1382,8 +1441,24 @@ void RegisterEmscriptenCallbacks(wxApp* app)
     result = emscripten_set_blur_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, app, false, FocusCallback);
     wxASSERT(result == EMSCRIPTEN_RESULT_SUCCESS);
 
-    result = emscripten_set_beforeunload_callback(app, UnloadCallback);
-    wxASSERT(result == EMSCRIPTEN_RESULT_SUCCESS);
+    // KICLOUD: W3.0P (E2.2): 'beforeunload' is answered in JS from the published
+    // modified-window set (see the note above RegisterEmscriptenCallbacks); this
+    // replaces emscripten_set_beforeunload_callback(app, UnloadCallback).
+    EM_ASM({
+        if (typeof window === 'undefined' || window.__wxBeforeUnloadInstalled)
+            return;
+        window.__wxBeforeUnloadInstalled = true;
+        if (!(globalThis.__wxModifiedWindows instanceof Set))
+            globalThis.__wxModifiedWindows = new Set();
+        window.addEventListener('beforeunload', function (e) {
+            if (globalThis.__wxModifiedWindows.size > 0)
+            {
+                e.preventDefault();
+                e.returnValue = 'wx-modified';  // older engines need a non-empty value
+                return 'wx-modified';
+            }
+        });
+    });
 
     // Initialize HTML5 drag and drop handlers
     EM_ASM({

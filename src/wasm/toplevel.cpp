@@ -102,10 +102,35 @@ void wxTopLevelWindowWasm::Init()
     m_isActive = false;
     m_minimizeButtonRect = wxRect(0, 0, MINIMIZE_BUTTON_SIZE, MINIMIZE_BUTTON_SIZE);
     m_isDragging = false;
+    // KICLOUD: W3.0P (E2.2): wx 3.2's wxTopLevelWindowBase leaves m_modified
+    // uninitialized (only wxOSX sets it); the port publishes it, so start clean.
+    wxTopLevelWindowBase::OSXSetModified(false);
+}
+
+// KICLOUD: W3.0P (TODO.md E2.2; see the note above RegisterEmscriptenCallbacks in
+// src/wasm/app.cpp): the set of modified top-level windows, published to JS for
+// the 'beforeunload' listener, which must answer without calling into wasm. Keyed
+// by the window's address (valid from construction to destruction).
+EM_JS(void, wxWasmPublishModified, (const void* window, int modified), {
+    if (!(globalThis.__wxModifiedWindows instanceof Set))
+        globalThis.__wxModifiedWindows = new Set();
+    if (modified)
+        globalThis.__wxModifiedWindows.add(window);
+    else
+        globalThis.__wxModifiedWindows.delete(window);
+});
+
+void wxTopLevelWindowWasm::OSXSetModified(bool modified)
+{
+    wxTopLevelWindowBase::OSXSetModified(modified);
+    wxWasmPublishModified(this, modified ? 1 : 0);
 }
 
 wxTopLevelWindowWasm::~wxTopLevelWindowWasm()
 {
+    // KICLOUD: W3.0P (E2.2): a destroyed window has no unsaved changes to protect.
+    wxWasmPublishModified(this, 0);
+
     // Notify the host page when the application's main window is destroyed
     // (File->Quit or last close). A vetoed close (e.g. a cancelled
     // unsaved-changes prompt) never reaches destruction, so this only fires

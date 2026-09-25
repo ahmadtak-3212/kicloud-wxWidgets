@@ -63,6 +63,12 @@ public:
     virtual void SetTitle(const wxString &title) wxOVERRIDE;
     virtual wxString GetTitle() const wxOVERRIDE { return m_title; }
 
+    // KICLOUD: W3.0P (TODO.md E2.2): wx's portable "this window has unsaved
+    // changes" flag (a dot in the close button on macOS) is also published to JS
+    // (globalThis.__wxModifiedWindows), from which the page's 'beforeunload'
+    // listener decides synchronously whether the browser asks before leaving.
+    virtual void OSXSetModified(bool modified) wxOVERRIDE;
+
     virtual wxString GetCSSClassList() const wxOVERRIDE {
       return wxNonOwnedWindow::GetCSSClassList() + " toplevel";
     }
