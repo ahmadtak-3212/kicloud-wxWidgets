@@ -19,9 +19,13 @@ The port mirrors the Qt port (`src/qt`, `include/wx/qt`) one-for-one:
 | generic implementation chosen by Qt (`wxUSE_GENERIC_*`, generic dialogs, list/tree/dataview controls) | the same generic implementation |
 
 Every class the Qt port declares gets a file of the same name here; where the Qt
-port uses a generic class, so do we. JavaScript glue lives in `src/wasm/js/`
-(`wx.js` is the Emscripten `--js-library`, `wx-dom.js` the runtime module;
-added by W3.3).
+port uses a generic class, so do we. The JavaScript runtime lives in
+`src/wasm/js/` (KICLOUD: W3.0P, imported from PCBJam): `wx.js` (element registry
+for tests, browser/platform info, window chrome), `wx-dom.js` (the native DOM
+controls) and `scheduler.js` (the JSPI scheduler and wait registry the C++ calls
+as `globalThis.__wxScheduler`). They are `--pre-js` files, installed to
+`<prefix>/share/wxwidgets/wasm/`; `wx-config --libs` prints them for GUI
+libraries (`build/cmake/config.cmake`). `docs/` holds the port's design notes.
 
 ## Build wiring (wx CMake build only; kicloud/TODO.md B5)
 
@@ -58,7 +62,21 @@ wxxml); `--gui on` builds every library with this toolkit (kicloud W3.1b).
   `kicloud/docs/provenance.md`. Adapted port code is LGPL v2 without the
   wxWindows exception; wholly original files may use the wxWindows Licence.
 
+## Pages that host the port
+
+A page must provide `#main-window` wrapping the 2D `#canvas` (the main frame
+paints into it and it defines the wx screen origin: wx screen coordinates are
+`#canvas`-relative CSS px), `#window-container` for other top-level windows, and
+a global `mainWindow` (the display size). The JSPI promising exports (DOM/mouse
+events, window move/close/resize, the scheduler ticks) are marked
+`KICLOUD-JSPI-EXPORT` and reach `-sJSPI_EXPORTS` through
+`kicloud/toolchain/jspi-exports.txt`. See `kicloud/tests/wx/smoke/`.
+
 ## Status
 
-W3.1: toolkit wiring and the wxBase build only; the groups above are empty.
-W3.1b adds every class as a stub (link closure); W3.3–W3.16 implement them.
+W3.1: toolkit wiring and the wxBase build. W3.0P: PCBJam's DOM port
+(`pcbjam/wxwidgets@8bad5f58e9`) imported with provenance
+(`kicloud/docs/decisions/W3.0P-import-inventory.md`,
+`kicloud/docs/provenance.md`); every GUI library builds and a smoke app runs in
+Chromium and Firefox. W3.1b–W3.16 verify and complete it against their own
+gates (coverage table in `kicloud/progress/W3.0P.md`).
