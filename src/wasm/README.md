@@ -92,6 +92,18 @@ with `wxTopLevelWindow::OSXSetModified(true)` (published to
 `globalThis.__wxModifiedWindows`); a program that wants the prompt keeps that
 flag current. No `wxEVT_CLOSE_WINDOW` is sent when the page unloads.
 
+Nested blocking calls (TODO.md E2.4/E2.8): a nested `wxGUIEventLoop::Run()`
+and `wxDialog::ShowModal()` suspend their chain on a scheduler wait of their
+own (`wxWasmNestedWait`, `include/wx/wasm/private/yieldwait.h`); the top-level
+tick keeps dispatching meanwhile. `ScheduleExit()`/`Exit()` and `EndModal()`
+end their own call's wait, and a call returns only once every blocking call
+begun after it has returned (wx's `ScheduleExit()` contract: "after any nested
+loops terminate"), so ending an outer quasi-modal or modal while an inner one
+runs is safe. `Run()` returns the code given to `Exit()`/`ScheduleExit()`, and
+the top-level loop exits only once no nested call is left. `ShowModal()`
+disables no other window (native ports use a `wxWindowDisabler`); the page's
+modal barrier only blocks windows an upper one overlaps.
+
 ## Status
 
 W3.1: toolkit wiring and the wxBase build. W3.0P: PCBJam's DOM port
