@@ -104,6 +104,23 @@ the top-level loop exits only once no nested call is left. `ShowModal()`
 disables no other window (native ports use a `wxWindowDisabler`); the page's
 modal barrier only blocks windows an upper one overlaps.
 
+Yields (TODO.md E2.5): `wxYield()`/`YieldFor(mask)` run on the caller's stack
+and return. `wxGUIEventLoop::DoYieldFor()` processes the pending wx events once.
+That includes the input the port queues while a dispatch chain is parked. Only
+the categories in the mask are processed (wx's `YieldFor()` contract); the
+others stay pending for the main loop. The yield repaints only when the mask
+has `wxEVT_CATEGORY_UI`, and the wx base sends idle events only for
+`wxEVT_CATEGORY_ALL`, once. KiCad's `DrainPendingEvents()` and the generic
+progress dialog therefore return with, for example, a CallAfter still pending.
+Due timers from the mailbox run inside a yield only right after the calling
+chain slept at the same dispatch depth: KiCad's RunSynchronousAction spin,
+`wxYield(); wxMilliSleep(1);`. The sleep is noted by `wxWasmNoteSleep()`, which
+PCBJam calls from its main-thread `nanosleep` shim
+(`pcbjam/wasm/shims/nanosleep_yield.c`). kicloud does not link that shim yet
+(TODO.md E2.6; W3.0P inventory row E2, owner W3.4). Until it does, the nested
+timer delivery never runs, and a main-thread sleep busy-waits
+(`emscripten_thread_sleep()`) without letting the browser run.
+
 ## Status
 
 W3.1: toolkit wiring and the wxBase build. W3.0P: PCBJam's DOM port
