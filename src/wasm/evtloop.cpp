@@ -713,9 +713,34 @@ void wxGUIEventLoop::DoYieldFor(long eventsToProcess)
     if (sleptJustBefore && (eventsToProcess & wxEVT_CATEGORY_TIMER))
         wxWasmMailboxDeliverNested();
 
-    while (Pending())
+    // KICLOUD: W3.0P (kicloud/TODO.md E2.5 and wx's YieldFor() contract, interface/wx/evtloop.h:
+    // events outside the mask are "delayed (i.e. processed by the main loop later)"; W3.0P
+    // lens 2 of the K.11 retry, round r1 review). PCBJam looped `while (Pending()) Dispatch();`.
+    // Pending() is HasPendingEvents(), which stays true while an event outside the mask waits
+    // (wxEvtHandler::ProcessPendingEvents() delays it and wxAppConsoleBase puts it back on the
+    // pending list), so a selective yield never returned: KiCad's DrainPendingEvents()
+    // (YieldFor(wxEVT_CATEGORY_TIMER) on every progress update) with a CallAfter pending froze
+    // the page. Every pass also repainted, and every third one sent idle events, which wx never
+    // does inside a selective yield. Like wxGTK and wxMSW, do the port's own work for the asked
+    // categories once and leave wxEVT_CATEGORY_ALL's extra work to the base class:
+    //  - the wx pending events, including the input the port queues while a chain is parked
+    //    (wxApp::HandleMouseEvent/HandleKeyEvent, wxEVT_CATEGORY_USER_INPUT). Inside a yield,
+    //    ProcessPendingEvents() processes only the events the mask allows and returns once only
+    //    delayed ones are left, which it keeps for the main loop;
+    //  - the repaint, the port's expose work (native ports put GDK_EXPOSE/WM_PAINT in
+    //    wxEVT_CATEGORY_UI), only for a yield that asks for UI events;
+    //  - wxEventLoopBase::DoYieldFor(): pending and idle events for wxEVT_CATEGORY_ALL only,
+    //    "just once".
+    // The guard is the one Dispatch() takes: a handler that suspends inside the yield keeps
+    // the interlock held.
+    if ( wxTheApp )
     {
-        Dispatch();
+        wxWasmDispatchGuard guard;
+
+        wxTheApp->ProcessPendingEvents();
+
+        if ( (eventsToProcess & wxEVT_CATEGORY_UI) && wxTheApp->GetTopWindow() )
+            wxTheApp->Paint();
     }
 
     wxEventLoopBase::DoYieldFor(eventsToProcess);
