@@ -19,8 +19,10 @@
 
 #include <emscripten.h>
 #include <stdio.h>   // printf: diagnostics land in the browser console
+#include <string.h>  // KICLOUD: W3.0P (E2.4): strcmp for wxWasmNestedWait's kinds
 
 #include <deque>
+#include <vector>    // KICLOUD: W3.0P (E2.4): the nested blocking calls (wxWasmNestedWait)
 
 // Run work on an activation that may suspend (defined below; declared here
 // for the entries near the top of this file). See its definition for why
@@ -349,44 +351,130 @@ extern "C" {
 //     ONE animation frame via wxWasmYieldToBrowser — a JSPI suspension the engine
 //     resumes on the next frame.
 //   * nested (DoRun depth >0): a registered "nested" scheduler wait (doc 17 S4) — no
-//     pump; the top-level tick keeps dispatching at any depth. ScheduleExit() resolves
-//     the innermost wait. The top-level loop instead just sets m_shouldExit.
+//     pump; the top-level tick keeps dispatching at any depth.
+// KICLOUD: W3.0P (kicloud/TODO.md E2.4/E2.8; W3.0P lens 2): the nested loop's wait is a
+// wxWasmNestedWait (wx/wasm/private/yieldwait.h), and so is a modal's: ScheduleExit() ends
+// the exiting loop's OWN wait (PCBJam resolved the innermost "nested" wait, whichever loop
+// was exiting, and DoRun returned 0), and a loop returns, with the code ScheduleExit() was
+// given, once every blocking call begun after it has returned. The top-level loop likewise
+// exits only once no nested blocking call is left.
 
 // Depth of nested wxGUIEventLoop::DoRun() calls. 0 = none running; 1 = the
 // top-level main loop; >1 = a nested (quasi-modal) loop.
 static int s_wxRunDepth = 0;
 
+// ----------------------------------------------------------------------------
+// wxWasmNestedWait: the nested blocking calls, innermost last
+// ----------------------------------------------------------------------------
+// KICLOUD: W3.0P (kicloud/TODO.md E2.4; W3.0P lens 2 of the K.11 retry). The contract is in
+// wx/wasm/private/yieldwait.h. The list holds pointers to the calls' own wxWasmNestedWait
+// objects, which live on the suspended stacks of the calls (each activation has its own
+// stack region, scheduler.js), so a call's End() from another activation reaches it.
+
 namespace
 {
 
-// The nested loop's suspension. The opener's chain suspends here for the
-// dialog's whole lifetime; the interlock is zeroed for that whole span so the
-// legitimate dispatcher keeps running meanwhile (manual save/restore:
-// wxWasmDispatchRestore centralizes the erased-guard reporting). The nested
-// loop is a registered WAIT, not a pump (doc 17 S4): the top-level tick is
-// the sole dispatcher at any depth, and ScheduleExit()/Exit() resolves the
-// innermost "nested" wait to resume this stack.
-void wxWasmNestedWaitBody(void *)
+std::vector<wxWasmNestedWait *> &wxWasmNestedWaits()
 {
-    // Token 0 = the scheduler refused the wait (dead or terminal instance):
-    // never begin a park nothing can resolve — return without touching the
-    // dispatch interlock.
-    const int token = wxWasmBeginWait("nested");
-    if (token <= 0)
-        return;
-
-    const int savedDispatchDepth = wxWasmDispatchDepth;
-    wxWasmDispatchDepth = 0;
-    wxWasmYieldUntil(token);   // suspends until resolved
-    wxWasmDispatchRestore(savedDispatchDepth, "NestedLoop");
+    static std::vector<wxWasmNestedWait *> s_waits;
+    return s_waits;
 }
 
 }  // namespace
 
-EM_JS(void, wxWasmExitNestedLoop, (), {
-    // The nested loop is a registered wait (doc 17 S4).
-    globalThis.__wxScheduler.resolveTopWait('nested', 0);
-});
+wxWasmNestedWait::wxWasmNestedWait(const char *kind)
+    : m_endedKind(strcmp(kind, "modal") == 0 ? "modal-ended" : "nested-ended"),
+      m_token(wxWasmBeginWait(kind)),
+      m_result(0),
+      m_listed(false),
+      m_ended(false),
+      m_endedByOwner(false)
+{
+    // Token 0 = the scheduler refused the wait (dead or terminal instance):
+    // never begin a park nothing can resolve (IsOk() is false).
+    if ( m_token > 0 )
+    {
+        wxWasmNestedWaits().push_back(this);
+        m_listed = true;
+    }
+}
+
+wxWasmNestedWait::~wxWasmNestedWait()
+{
+    // Wait() takes the call off the list when it returns; a call that never waited (or
+    // unwound) leaves it here.
+    if ( m_listed )
+        Unlist();
+}
+
+size_t wxWasmNestedWait::GetCount()
+{
+    return wxWasmNestedWaits().size();
+}
+
+void wxWasmNestedWait::Unlist()
+{
+    std::vector<wxWasmNestedWait *> &waits = wxWasmNestedWaits();
+    for ( size_t i = waits.size(); i-- > 0; )
+    {
+        if ( waits[i] == this )
+        {
+            waits.erase(waits.begin() + i);
+            break;
+        }
+    }
+    m_listed = false;
+
+    // The enclosing call is innermost now. If it was ended while this one ran, resume it
+    // so that it returns (wxGTK: the returning loop's gtk_main_quit() of the enclosing one).
+    // A wait of it that is resolved already (its resume is queued) makes this a no-op.
+    if ( !waits.empty() && waits.back()->m_ended )
+        wxWasmResolveWait(waits.back()->m_token, waits.back()->m_result);
+}
+
+int wxWasmNestedWait::Wait()
+{
+    if ( !m_listed )
+        return m_result;
+
+    for ( ;; )
+    {
+        const int result = wxWasmYieldUntil(m_token);   // suspends until resolved
+        if ( !m_ended )
+        {
+            // Resolved by someone other than End(): the shim's error containment
+            // (resolveTopWait after a handler threw). That ends the call, as before.
+            m_ended = true;
+            m_result = result;
+        }
+        if ( wxWasmNestedWaits().back() == this )
+            break;
+
+        // Ended while a call begun after this one still runs: park again until that one
+        // has returned (its Unlist() resolves the new wait). The "-ended" kind keeps this
+        // wait out of the containment's "nested"/"modal" stacks.
+        m_token = wxWasmBeginWait(m_endedKind);
+        if ( m_token <= 0 )
+            break;   // refused (dead or terminal instance): nothing could resume this call
+    }
+
+    Unlist();
+    return m_result;
+}
+
+void wxWasmNestedWait::End(int result)
+{
+    m_result = result;
+    m_endedByOwner = true;
+    if ( m_ended )
+        return;
+
+    m_ended = true;
+    // Resolve the call's own wait (E2.4). Resolved before its Wait() parks (EndModal inside
+    // Show), the wait returns at once; a call that is not innermost parks again (Wait()).
+    if ( m_listed )
+        wxWasmResolveWait(m_token, result);
+}
 
 // Top-level main loop: yield to the browser for ONE animation frame, then
 // return. Called in a plain C++ while-loop in DoRun (below), so each tick
@@ -554,19 +642,23 @@ extern "C" void wxWasmRunOnDispatchContext(void (*fn)(void *), void *arg)
 // wxGUIEventLoop
 // ----------------------------------------------------------------------------
 
-void wxGUIEventLoop::ScheduleExit(int WXUNUSED(rc))
+void wxGUIEventLoop::ScheduleExit(int rc)
 {
     wxCHECK_RET( IsInsideRun(), wxT("can't call ScheduleExit() if not started") );
 
+    // KICLOUD: W3.0P (E2.4; W3.0P lens 2): keep the code for Run() (wxGTK's m_exitcode)
+    m_exitcode = rc;
     m_shouldExit = true;
 
-    // The top-level loop is a plain while-loop that checks m_shouldExit (above). A nested
-    // (quasi-modal) loop is a registered scheduler wait — resolve it so its DoRun resumes
-    // and returns.
-    if ( s_wxRunDepth > 1 )
-    {
-        wxWasmExitNestedLoop();
-    }
+    // The top-level loop is a plain while-loop that checks m_shouldExit (DoRun). A nested
+    // (quasi-modal) loop blocks on its own wait.
+    // KICLOUD: W3.0P (E2.4, wx's ScheduleExit contract; W3.0P lens 2): end THIS loop's
+    // wait; PCBJam resolved the innermost "nested" wait whenever any loop but the top-level
+    // one was exiting, which ended an inner loop instead of an outer one, and the top-level
+    // loop's own ScheduleExit ended a nested loop. The loop returns once every blocking call
+    // begun after it has returned (wxWasmNestedWait::Wait).
+    if ( m_nestedWait )
+        m_nestedWait->End(rc);
 }
 
 bool wxGUIEventLoop::Pending() const
@@ -643,10 +735,31 @@ int wxGUIEventLoop::DoRun()
     {
         // A nested loop is a registered "nested" wait that suspends whatever
         // activation is running — a tool coroutine's own activation included.
-        wxWasmNestedWaitBody(NULL);
+        // KICLOUD: W3.0P (E2.4; W3.0P lens 2): the loop's own wxWasmNestedWait, which its
+        // ScheduleExit() ends; it returns once every blocking call begun after it has
+        // returned, with the code ScheduleExit() was given (PCBJam: 0).
+        wxWasmNestedWait wait("nested");
+        if ( !wait.IsOk() )
+        {
+            // The scheduler refused the wait (dead or terminal instance): return
+            // without touching the dispatch interlock, as before.
+            --s_wxRunDepth;
+            return 0;
+        }
+        m_nestedWait = &wait;
 
+        // The opener's chain suspends here for the dialog's whole lifetime; the
+        // interlock is zeroed for that whole span so the legitimate dispatcher keeps
+        // running meanwhile (manual save/restore: wxWasmDispatchRestore centralizes
+        // the erased-guard reporting).
+        const int savedDispatchDepth = wxWasmDispatchDepth;
+        wxWasmDispatchDepth = 0;
+        const int result = wait.Wait();   // suspends until ended and innermost
+        wxWasmDispatchRestore(savedDispatchDepth, "NestedLoop");
+
+        m_nestedWait = NULL;
         --s_wxRunDepth;
-        return 0;
+        return result;
     }
 
     if (!wxTopLevelWindows.empty())
@@ -667,7 +780,11 @@ int wxGUIEventLoop::DoRun()
     // this loop runs inline on main()'s promising activation, and the
     // per-frame wait suspends that activation until the next frame.
     // m_shouldExit, set by ScheduleExit(), ends the loop after the current tick.
-    while (!m_shouldExit)
+    // KICLOUD: W3.0P (E2.4, wx's ScheduleExit contract: "after any nested loops terminate";
+    // W3.0P lens 2): and only once no nested blocking call is left (PCBJam's ScheduleExit
+    // ended the innermost nested loop instead); the ticks below dispatch the events that
+    // end them.
+    while (!m_shouldExit || wxWasmNestedWait::GetCount() > 0)
     {
         // Schedule, don't dispatch: see wxWasmScheduleProcessEvents. The tick's
         // events run from a fresh JS task while this loop is suspended below,
@@ -693,5 +810,6 @@ int wxGUIEventLoop::DoRun()
         if (globalThis.__wxScheduler) globalThis.__wxScheduler.shutdown("main loop exited");
     });
 
-    return 0;
+    // KICLOUD: W3.0P (E2.4): the code given to Exit()/ScheduleExit(), as in wxGTK (PCBJam: 0)
+    return m_exitcode;
 }

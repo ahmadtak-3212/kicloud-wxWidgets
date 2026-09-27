@@ -16,6 +16,7 @@
 extern WXDLLIMPEXP_DATA_CORE(const char) wxDialogNameStr[];
 class WXDLLIMPEXP_FWD_CORE wxWindowDisabler;
 class WXDLLIMPEXP_FWD_CORE wxEventLoop;
+class WXDLLIMPEXP_FWD_CORE wxWasmNestedWait;
 
 // Dialog boxes
 class WXDLLIMPEXP_CORE wxDialog : public wxDialogBase
@@ -85,6 +86,10 @@ private:
 
     // is modal right now?
     bool m_isShowingModal;
+
+    // KICLOUD: W3.0P (kicloud/TODO.md E2.4 "EndModal(): Resolve(token)"; W3.0P lens 2): the
+    // wait of the running ShowModal() (wx/wasm/private/yieldwait.h), which EndModal() ends
+    wxWasmNestedWait *m_modalWait;
 
     wxDECLARE_DYNAMIC_CLASS(wxDialog);
     wxDECLARE_EVENT_TABLE();
