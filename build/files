@@ -416,8 +416,9 @@ OPENGL_QT_SRC=
 # them with the port imported from pcbjam@8bad5f58e9 (its build/bakefiles/files.bkl
 # WASM groups; include/wx/wasm/setup.h is not listed: CMake generates setup.h;
 # the private headers are listed too, so they are installed for the KiCad port).
-# The port mirrors the Qt port's class and header list under src/wasm and
-# include/wx/wasm (see src/wasm/README.md). As for the other ports,
+# The port follows the Qt port's file names for the classes it implements itself
+# (KICLOUD: W3.0P, K.11 retry round r3: not one-for-one; the Qt files without a
+# counterpart are listed in src/wasm/README.md). As for the other ports,
 # *_LOWLEVEL_* holds the low-level classes (app, event loop, DC, bitmap, ...)
 # and WASM_SRC/WASM_HDR the native (DOM) controls plus the generic classes the
 # port uses instead of native ones (their wx/generic headers are listed so

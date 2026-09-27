@@ -6,9 +6,10 @@ port** (`__WXWASM__`), not wxUniversal: simple controls are real DOM elements,
 owner-drawn and generic widgets paint through a Canvas2D-backed `wxDC`, and
 layout stays in wx sizers (kicloud/TODO.md B4 and E3).
 
-## Layout and the Qt-port mirroring rule
+## Layout and the Qt-port naming rule
 
-The port mirrors the Qt port (`src/qt`, `include/wx/qt`) one-for-one:
+The port follows the Qt port's layout (`src/qt`, `include/wx/qt`) and file names for
+the classes it implements itself:
 
 | Qt port | wxWASM port |
 |---|---|
@@ -16,10 +17,30 @@ The port mirrors the Qt port (`src/qt`, `include/wx/qt`) one-for-one:
 | `include/wx/qt/<x>.h` | `include/wx/wasm/<x>.h` |
 | `include/wx/qt/private/*.h` | `include/wx/wasm/private/*.h` |
 | `#elif defined(__WXQT__)` + `#include "wx/qt/<x>.h"` in `include/wx/*.h` | `#elif defined(__WXWASM__)` + `#include "wx/wasm/<x>.h"` |
-| generic implementation chosen by Qt (`wxUSE_GENERIC_*`, generic dialogs, list/tree/dataview controls) | the same generic implementation |
+| generic implementation chosen by Qt (`wxUSE_GENERIC_*`, generic dialogs, list/tree/dataview controls) | the same generic implementation, and more generic classes (below) |
 
-Every class the Qt port declares gets a file of the same name here; where the Qt
-port uses a generic class, so do we. The JavaScript runtime lives in
+KICLOUD: W3.0P (K.11 retry, round r3; kicloud ADR 0005 item 10): the port imported
+from PCBJam does **not** mirror the Qt list one-for-one, and its file list is kept as
+imported. At fork `82da2d0104`, 29 of the 85 `src/qt` sources and 24 of the 76
+top-level `include/wx/qt` headers have no counterpart here:
+
+| Qt files without a counterpart | What this port uses |
+|---|---|
+| `accel`, `calctrl`, `clrpicker`, `colordlg`, `dataview`, `dvrenderer`, `dvrenderers`, `dirdlg` (header only), `filedlg`, `fontdlg`, `listctrl`, `mdi`, `msgdlg`, `palette`, `spinctrl`, `statusbar`, `treectrl` | wx's generic class (`src/generic/`: `accel`, `calctrlg`, `clrpickerg`, `colrdlgg`, `datavgen`, `dirdlgg`, `filedlgg`, `fontdlgg`, `listctrl`, `mdig`, `msgdlgg`, `paletteg`, `spinctlg`, `statusbr`, `treectlg`) |
+| `printdlg`, `printqt`, `dcprint` | wx's generic print dialogs and PostScript printing (`prntdlgg`, `printps`, `dcpsg`) |
+| `minifram` | `wxMiniFrame` is `wxFrame` (`wx/minifram.h`) |
+| `ctrlsub` | wx's common `wxControlWithItems` |
+| `apptraits` | `wxGUIAppTraits` lives in `app.cpp` |
+| `mediactrl`, `taskbar` | off in this port (`wxUSE_MEDIACTRL 0`, `wxUSE_TASKBARICON 0`) |
+| `graphics`, `uiaction` | not implemented yet: no `wxGraphicsRenderer` (`wxUSE_CAIRO 0`) and no `wxUIActionSimulator` backend (W3.1b's stub audit lists them) |
+| `converter`, `defs`, `sockqt`; `private/{converter,pointer,treeitemdelegate,treeitemfactory,utils,winevent}.h` | Qt-internal code (Qt type conversions, Qt enums, Qt's socket notifier, Qt model/view helpers): none |
+
+The port's own files have no Qt counterpart: `config.cpp`, `domevents.cpp`,
+`elementtracker.cpp`, `keyboard.cpp`, `log.cpp`, `mouse.cpp`, the `js/` runtime and
+`docs/`; headers `chkconf.h`, `config.h`, `elementtracker.h`, `private.h`, `pthread.h`,
+`webviewhistoryitem.h` and `private/{dispatch,display,dom,keyboard,mailbox,mouse,yieldwait}.h`.
+A class this port implements natively gets the Qt file name; a class it takes from
+wx's generic code gets no file here. The JavaScript runtime lives in
 `src/wasm/js/` (KICLOUD: W3.0P, imported from PCBJam): `wx.js` (element registry
 for tests, browser/platform info, window chrome), `wx-dom.js` (the native DOM
 controls) and `scheduler.js` (the JSPI scheduler and wait registry the C++ calls
