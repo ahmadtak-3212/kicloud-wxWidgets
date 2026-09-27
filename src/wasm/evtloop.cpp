@@ -707,6 +707,14 @@ void wxGUIEventLoop::DoYieldFor(long eventsToProcess)
     // that yield qualifies: a sleep in some other loop (progress reporter,
     // simulator wait, a startup library wait) must not leave a mark behind
     // for an unrelated timer-capable yield later at the same depth.
+    //
+    // KICLOUD: W3.0P (K.11 retry, round r2; kicloud/TODO.md E2.5/E2.6). Two notes for kicloud:
+    // the mark is set only by PCBJam's main-thread nanosleep shim (wxWasmNoteSleep()), which
+    // kicloud does not link yet (W3.0P inventory row E2; task W3.4a), so this delivery does not
+    // run at all today; and KiCad 10.0.6's progress loops DO sleep between yields
+    // (PROGRESS_REPORTER_BASE::KeepRefreshing(true): wxMilliSleep(33) between updateUI() calls
+    // that end in DrainPendingEvents() = YieldFor(wxEVT_CATEGORY_TIMER)); PCBJam's KiCad fork
+    // skips those updates on wasm. W3.4a decides the rule with the shim.
     const bool sleptJustBefore = wxWasmMailboxSleptDepth == wxWasmDispatchDepth;
     wxWasmMailboxSleptDepth = -1;
 
