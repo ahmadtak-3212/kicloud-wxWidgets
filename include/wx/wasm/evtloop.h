@@ -11,6 +11,8 @@
 
 #include "wx/evtloop.h"
 
+class WXDLLIMPEXP_FWD_CORE wxWasmNestedWait;
+
 // ----------------------------------------------------------------------------
 // wxGUIEventLoop for wxWebAssembly
 // ----------------------------------------------------------------------------
@@ -18,7 +20,8 @@
 class WXDLLIMPEXP_CORE wxGUIEventLoop : public wxEventLoopBase
 {
 public:
-    wxGUIEventLoop() {}
+    // KICLOUD: W3.0P (E2.4): the exit code and the nested loop's wait (see below)
+    wxGUIEventLoop() : m_exitcode(0), m_nestedWait(NULL) {}
 
     virtual bool IsOk() const { return true; }
 
@@ -33,6 +36,13 @@ protected:
     virtual void DoYieldFor(long eventsToProcess);
 
 private:
+    // KICLOUD: W3.0P (kicloud/TODO.md E2.4; W3.0P lens 2): Run() returns the code given to
+    // Exit()/ScheduleExit(), as in wxGTK (PCBJam's DoRun returned 0), and a nested loop's
+    // ScheduleExit() ends the loop's own wait (wx/wasm/private/yieldwait.h), set while its
+    // DoRun() blocks.
+    int m_exitcode;
+    wxWasmNestedWait *m_nestedWait;
+
     wxDECLARE_NO_COPY_CLASS(wxGUIEventLoop);
 };
 

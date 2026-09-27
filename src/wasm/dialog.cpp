@@ -17,6 +17,10 @@
 // JSPI-suspends the C++ stack on it; EndModal() resolves the innermost
 // registered wait and the stack resumes (docs/features/async/17 S4). The
 // top-level tick is the sole event dispatcher while the modal is open.
+// KICLOUD: W3.0P (kicloud/TODO.md E2.4; W3.0P lens 2 of the K.11 retry): EndModal()
+// resolves the dialog's OWN wait (a wxWasmNestedWait, wx/wasm/private/yieldwait.h), not
+// the innermost one, and ShowModal() returns once every blocking call begun after it (a
+// modal or a nested loop) has returned.
 
 // ============================================================================
 // declarations
@@ -64,6 +68,7 @@ void wxDialog::Init()
     m_eventLoop = NULL;
     m_isShowingModal = false;
     m_modalCallback = NULL;
+    m_modalWait = NULL;   // KICLOUD: W3.0P (E2.4)
 }
 
 wxDialog::~wxDialog()
@@ -220,22 +225,26 @@ int wxDialog::ShowModal()
     // wxWasmYieldUntil returns immediately (doc 17 S4). No modal pump exists:
     // the top-level tick is the sole dispatcher (dialogs on the DOM port are
     // real HTML, so they render without a paint loop even pre-main-loop).
-    const int waitToken = wxWasmBeginWait("modal");
+    // KICLOUD: W3.0P (E2.4; W3.0P lens 2): the wait is this call's wxWasmNestedWait, which
+    // EndModal() ends; it returns once every blocking call begun after it has returned.
+    wxWasmNestedWait wait("modal");
 
     // Token 0 = the scheduler refused the wait (dead or terminal instance):
     // never show a modal that no EndModal can ever dismiss. Cancel matches
-    // the containment convention (wxWasmExitNestedLoop / the shim's error
-    // containment both resolve modals with wxID_CANCEL).
-    if (waitToken <= 0)
+    // the containment convention (the shim's error containment resolves
+    // modals with wxID_CANCEL).
+    if ( !wait.IsOk() )
     {
         SetReturnCode(wxID_CANCEL);
         return wxID_CANCEL;
     }
 
+    m_modalWait = &wait;
     m_isShowingModal = true;
     Show(true);
 
-    // Suspend the C++ stack until EndModal() resolves it.
+    // Suspend the C++ stack until EndModal() ends the wait and every blocking
+    // call begun after this one has returned.
     //
     // The opener's dispatch chain suspends here for the modal's whole
     // lifetime; the legitimate dispatcher keeps running meanwhile, so zero
@@ -243,8 +252,16 @@ int wxDialog::ShowModal()
     // wxWasmDispatchRestore centralizes the erased-guard reporting).
     const int savedDispatchDepth = wxWasmDispatchDepth;
     wxWasmDispatchDepth = 0;
-    const int result = wxWasmYieldUntil(waitToken);
+    const int result = wait.Wait();
     wxWasmDispatchRestore(savedDispatchDepth, "ShowModal");
+
+    // KICLOUD: W3.0P (E2.4): EndModal() forgets the wait before it ends it, and a dialog
+    // destroyed while modal ends it too (~wxDialog -> Show(false) -> EndModal()), so after
+    // an EndModal() the dialog may be gone and is not touched here. A wait that only the
+    // shim's error containment ended leaves the dialog alive, still modal (as before) and
+    // pointing at this wait, which goes out of scope now: forget it.
+    if ( !wait.IsEndedByOwner() )
+        m_modalWait = NULL;
 
     return result;
 }
@@ -270,9 +287,17 @@ void wxDialog::EndModal(int retCode)
 
     m_isShowingModal = false;
 
-    // Resolve the innermost registered modal wait (wx LIFO semantics). A
-    // resolve racing ahead of ShowModal's park pre-resolves the promise.
-    wxWasmResolveTopWait("modal", retCode);
+    // KICLOUD: W3.0P (kicloud/TODO.md E2.4 "EndModal(): Resolve(token)"; W3.0P lens 2):
+    // end THIS dialog's wait; PCBJam resolved the innermost registered modal wait, which
+    // ended another dialog's ShowModal() when this one was not the innermost. ShowModal()
+    // returns once every blocking call begun after it has returned (LIFO). A resolve
+    // racing ahead of ShowModal's park pre-resolves the promise.
+    if ( m_modalWait )
+    {
+        wxWasmNestedWait * const wait = m_modalWait;
+        m_modalWait = NULL;
+        wait->End(retCode);
+    }
 
     Show(false);
 
