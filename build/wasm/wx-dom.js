@@ -125,6 +125,76 @@
                    ['text', 'password', 'number', 'search'].indexOf(el.type) >= 0));
   }
 
+  // KICLOUD: W3.0P (TODO.md E3 "Keyboard"; W3.0P lens 2 of the K.11 retry, round r2 review):
+  // KICLOUD: while a DOM editable has focus the browser handles the key natively (IME works);
+  // KICLOUD: Escape, Tab navigation and accelerators still go to wx. PCBJam's editable
+  // KICLOUD: listeners stopped EVERY key before the window-level keyboard callback
+  // KICLOUD: (src/wasm/app.cpp KeyCallback, bubble phase), so no Escape, Ctrl/Cmd+S or Tab
+  // KICLOUD: typed in a wx text control reached wx. The rule is defined once, here: the
+  // KICLOUD: editable listeners below let exactly these keys go on to the window, and
+  // KICLOUD: KeyCallback routes them through wxDomRouteKey().
+  // Keys the input keeps even with Ctrl/Cmd held: its editing chords and the caret,
+  // deletion and Enter keys (Ctrl+Left = word left, Cmd+Backspace = delete to line start,
+  // ...). Enter and the arrow/page keys reach wx through the listener's own dispatch.
+  var EDITABLE_KEEPS_KEY = { ArrowLeft: 1, ArrowRight: 1, ArrowUp: 1, ArrowDown: 1,
+                             Home: 1, End: 1, PageUp: 1, PageDown: 1, Backspace: 1,
+                             Delete: 1, Insert: 1, Enter: 1 };
+  var EDITABLE_KEEPS_CHORD = 'acvxyz';  // select all, copy, paste, cut, redo, undo
+  var BARE_MODIFIER = { Control: 1, Shift: 1, Alt: 1, AltGraph: 1, Meta: 1, OS: 1,
+                        CapsLock: 1, NumLock: 1, ScrollLock: 1, Fn: 1, Hyper: 1, Super: 1 };
+  // DOM code -> did that key's last keydown go to wx? (its keyup follows it)
+  var keyDownToWx = Object.create(null);
+
+  // The letter of a Ctrl/Cmd chord as the browser's own editing shortcuts see it: the
+  // typed Latin letter (AZERTY's A is Ctrl+A), else the legacy key code, which gives the
+  // US-layout letter on a non-Latin layout (Russian Ctrl+С is Ctrl+C).
+  function chordLetter(key, keyCode) {
+    if (key.length === 1 && /[a-z]/i.test(key)) return key.toLowerCase();
+    if (keyCode >= 65 && keyCode <= 90) return String.fromCharCode(keyCode + 32);
+    return '';
+  }
+
+  // Should a key typed while a DOM editable has focus go to wx? type: 'keydown' | 'keyup'
+  // | 'keypress'; code: KeyboardEvent.code (or .key); keyCode: the legacy key code (229
+  // while an IME composes); composing: KeyboardEvent.isComposing; wxOwned: the editable
+  // is a wx control (Tab navigation in a host page's own inputs stays the browser's).
+  function editableKeyToWx(type, key, code, keyCode, ctrl, meta, alt, composing, wxOwned) {
+    // a routed keydown is cancelled, so no character follows it: characters are the input's
+    if (type === 'keypress') return false;
+    // a keyup goes where its keydown went (wx's key state is released: wxGetKeyState)
+    if (type === 'keyup' && code in keyDownToWx) return keyDownToWx[code];
+    if (composing || keyCode === 229 || key === 'Process' || key === 'Dead' ||
+        key === 'Unidentified' || BARE_MODIFIER[key]) {
+      return false;
+    }
+    if (key === 'Escape') return true;
+    if (key === 'Tab') return !!wxOwned;
+    if (/^F([1-9]|1[0-9]|2[0-4])$/.test(key)) return true;   // function keys: accelerators
+    // Chords: Ctrl/Cmd + a key the input does not keep. Not Alt/Option alone (a typed
+    // character on macOS), not Ctrl+Alt without Meta (AltGr typing on Windows).
+    if (!(ctrl || meta) || (ctrl && alt && !meta)) return false;
+    if (EDITABLE_KEEPS_KEY[key]) return false;
+    var letter = chordLetter(key, keyCode);
+    return !(letter && EDITABLE_KEEPS_CHORD.indexOf(letter) >= 0);
+  }
+
+  function editableEventToWx(ev) {
+    return editableKeyToWx(ev.type, ev.key, ev.code || ev.key, ev.keyCode, ev.ctrlKey,
+                           ev.metaKey, ev.altKey, ev.isComposing, true);
+  }
+
+  // The decision of src/wasm/app.cpp KeyCallback: the rule above for a DOM editable, every
+  // key for any other focus. It records each keydown's verdict for that key's keyup.
+  window.wxDomRouteKey = function (type, key, code, keyCode, ctrl, meta, alt, editable,
+                                   wxOwned) {
+    var toWx = editable ? editableKeyToWx(type, key, code, keyCode, ctrl, meta, alt, false,
+                                          wxOwned)
+                        : true;
+    if (type === 'keydown') keyDownToWx[code] = toWx;
+    else if (type === 'keyup') delete keyDownToWx[code];
+    return toWx;
+  };
+
   function flexCenter(el) {
     el.dataset.wxDisplay = 'flex';
     el.style.display = 'flex';
@@ -456,10 +526,20 @@
           // Typing belongs to the input; don't let the window-level
           // Emscripten keyboard handler see it (belt — the C++ callback
           // also checks wxDomEditableFocused as suspenders).
-          ev.stopPropagation();
+          // KICLOUD: W3.0P (TODO.md E3): except Escape, Tab and accelerators, which go on
+          // KICLOUD: to that handler (editableKeyToWx above). The verdict is kept for the
+          // KICLOUD: key's keyup.
+          var toWx = editableEventToWx(ev);
+          keyDownToWx[ev.code || ev.key] = toWx;
+          if (!toWx) ev.stopPropagation();
         });
         valueEl.addEventListener('keyup', function (ev) {
-          ev.stopPropagation();
+          // KICLOUD: W3.0P (TODO.md E3): a keyup goes where its keydown went; the window
+          // KICLOUD: handler forgets the verdict of the keys it gets (wxDomRouteKey).
+          if (!editableEventToWx(ev)) {
+            delete keyDownToWx[ev.code || ev.key];
+            ev.stopPropagation();
+          }
         });
       }
     }

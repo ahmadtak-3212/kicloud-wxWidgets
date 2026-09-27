@@ -16,6 +16,7 @@
 #include "wx/log.h"
 #include "wx/menu.h"
 #include "wx/nonownedwnd.h"
+#include "wx/textctrl.h"  // KICLOUD: W3.0P (TODO.md E3): wxTE_PROCESS_TAB, wxWasmNavigateByTab()
 #include "wx/toplevel.h"
 #include "wx/utils.h"
 #include "wx/window.h"
@@ -1010,6 +1011,29 @@ bool TranslateMenuAccel(const wxKeyEvent &event)
 #endif
 }
 
+// KICLOUD: W3.0P (TODO.md E3: "Tab navigation [is] still routed to wx"; W3.0P lens 2 of the
+// K.11 retry, round r2 review). This port has no native tab traversal (wx/features.h defines
+// wxHAS_NATIVE_TAB_TRAVERSAL for GTK and Qt only), so wxControlContainer moves the focus when
+// it gets a wxNavigationKeyEvent, and PCBJam's port never sent one: an unconsumed Tab moved no
+// focus. As wxX11 does (src/x11/app.cpp), a Tab that the wxEVT_CHAR_HOOK, wxEVT_KEY_DOWN and
+// wxEVT_CHAR handlers all left unhandled navigates from the focused window
+// (wxWindowBase::HandleAsNavigationKey: Shift = backward, Ctrl = window change, e.g. notebook
+// pages). Not from a top-level window (no container to navigate in), a window with
+// wxWANTS_CHARS (it wants every key, the wxMSW rule) or a wxTextCtrl with wxTE_PROCESS_TAB
+// (Tab is its input).
+bool wxWasmNavigateByTab(const wxKeyEvent &event)
+{
+    wxWindow *focus = wxWindow::FindFocus();
+    if (focus == NULL || focus->IsTopLevel() || focus->HasFlag(wxWANTS_CHARS))
+        return false;
+#if wxUSE_TEXTCTRL
+    if (wxDynamicCast(focus, wxTextCtrl) != NULL && focus->HasFlag(wxTE_PROCESS_TAB))
+        return false;
+#endif
+    wxWasmDispatchGuard guard;
+    return focus->HandleAsNavigationKey(event);
+}
+
 void wxWasmRunKeyJob(void *arg)
 {
     wxWasmKeyJob *job = static_cast<wxWasmKeyJob *>(arg);
@@ -1032,13 +1056,22 @@ void wxWasmRunKeyJob(void *arg)
                 job->preventDefault = true;
             }
             // The browser does not generate char events for some key codes
-            else if (KeyCodeNeedsCharEvent(event.GetKeyCode()))
+            // KICLOUD: W3.0P (TODO.md E3): nor for Tab, which navigates when nothing
+            // KICLOUD: handles it (wxWasmNavigateByTab).
+            else if (KeyCodeNeedsCharEvent(event.GetKeyCode()) ||
+                     event.GetKeyCode() == WXK_TAB)
             {
-                if (!app->HandleKeyEvent(&event))
+                bool handled = app->HandleKeyEvent(&event);
+                if (!handled)
                 {
                     wxKeyEvent charEvent(wxEVT_CHAR, event);
-                    app->HandleKeyEvent(&charEvent);
+                    handled = app->HandleKeyEvent(&charEvent);
                 }
+                // Never while another chain is parked, as for the menubar
+                // accelerators above (HandleKeyEvent then queues the events and
+                // reports them handled anyway).
+                if (!handled && event.GetKeyCode() == WXK_TAB && !wxWasmDispatchParked())
+                    wxWasmNavigateByTab(event);
             }
             else
             {
@@ -1122,27 +1155,32 @@ EM_BOOL KeyCallback(int eventType,
     // Firefox does not fire focusout when a focused element is removed
     // (e.g. a wizard page destroyed mid-typing), which left the flag
     // stuck and swallowed every key for the rest of the session.
-    if (EM_ASM_INT({
-            if (typeof document === 'undefined') return 0;
+    // KICLOUD: W3.0P (TODO.md E3 "Keyboard"; W3.0P lens 2 of the K.11 retry, round r2
+    // KICLOUD: review): which keys still go to wx from a DOM editable - Escape, Tab
+    // KICLOUD: navigation and accelerators (app-owned chords: native menu accelerators fire
+    // KICLOUD: regardless of focus, and the browser default of Cmd/Ctrl+S = save page is never
+    // KICLOUD: wanted) - is decided by wxDomRouteKey() in src/wasm/js/wx-dom.js, the rule
+    // KICLOUD: that the wx editable controls' own listeners apply too; editing chords
+    // KICLOUD: (Cmd+C/V/X/A/Z/...) stay with the input. PCBJam let only Escape and Ctrl/Cmd+S
+    // KICLOUD: through here, and the editables' listeners stopped even those.
+    const char *routeType = eventType == EMSCRIPTEN_EVENT_KEYDOWN ? "keydown"
+                          : eventType == EMSCRIPTEN_EVENT_KEYUP   ? "keyup"
+                                                                  : "keypress";
+    const std::string domCode = wxWasmKeyEventCode(*emscriptenEvent);
+    if (!EM_ASM_INT({
+            if (typeof document === 'undefined') return 1;
             var ae = document.activeElement;
-            return (ae && (ae.tagName === 'INPUT' ||
-                           ae.tagName === 'TEXTAREA' ||
-                           ae.tagName === 'SELECT' ||
-                           ae.isContentEditable)) ? 1 : 0;
-        }))
+            var editable = !!ae && (ae.tagName === 'INPUT' ||
+                                    ae.tagName === 'TEXTAREA' ||
+                                    ae.tagName === 'SELECT' ||
+                                    ae.isContentEditable);
+            var wxOwned = editable && !!ae.closest && !!ae.closest('.wx-dom-control');
+            return window.wxDomRouteKey(UTF8ToString($0), UTF8ToString($1), UTF8ToString($2),
+                                        $3, !!$4, !!$5, !!$6, editable, wxOwned) ? 1 : 0;
+        }, routeType, emscriptenEvent->key, domCode.c_str(), emscriptenEvent->keyCode,
+           emscriptenEvent->ctrlKey, emscriptenEvent->metaKey, emscriptenEvent->altKey))
     {
-        // App-owned chords still reach wx even from inside a text field —
-        // native menu accelerators fire regardless of focus, and the
-        // browser default (Cmd/Ctrl+S = save page) is never wanted.
-        // Editing chords (Cmd+C/V/X/A/Z/…) stay with the input.
-        const char *key = emscriptenEvent->key;
-        const bool saveChord =
-            (emscriptenEvent->ctrlKey || emscriptenEvent->metaKey) &&
-            !emscriptenEvent->altKey &&
-            (key[0] == 's' || key[0] == 'S') && key[1] == '\0';
-
-        if (strcmp(key, "Escape") != 0 && !saveChord)
-            return EM_FALSE;
+        return EM_FALSE;
     }
 
     wxApp* app = static_cast<wxApp*>(userData);
@@ -1158,8 +1196,6 @@ EM_BOOL KeyCallback(int eventType,
                        event.GetKeyCode(),
                        static_cast<const char*>(key_char.utf8_str()));
         */
-
-        const std::string domCode = wxWasmKeyEventCode(*emscriptenEvent);
 
         if (eventType == EMSCRIPTEN_EVENT_KEYPRESS)
         {
