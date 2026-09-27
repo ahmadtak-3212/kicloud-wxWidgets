@@ -309,6 +309,31 @@ void wxApp::ProcessPendingEvents()
     // this particular drain: under-posting is bounded to one drain,
     // over-posting is a duplicate motion the receiver treats as a no-op.
     m_parkedMotionQueued = false;
+
+    // KICLOUD: W3.0P (kicloud/TODO.md E2.5; K.11 retry, round r2). A pass over the pending
+    // events can run inside another one: wxGUIEventLoop::DoYieldFor() processes the events a
+    // selective yield allows, and a handler it runs may yield again (wxSafeYield(), KiCad's
+    // DrainPendingEvents()). The outer pass may have set aside ("delayed") the handlers whose
+    // events its mask does not allow, and wxAppConsoleBase::ProcessPendingEvents() refuses to
+    // start while any are set aside: its wxCHECK_RET("this helper list should be empty")
+    // asserts and returns with m_handlersWithPendingEventsLocker still entered, so the inner
+    // yield processed nothing, and a thread that later queues an event would block on that
+    // lock. Put them back first, as the outer pass does when it ends. The inner pass then
+    // processes what its own mask allows and sets the rest aside again; when the outer pass
+    // resumes, it sets aside again whatever its mask still does not allow. A handler that is
+    // back on the list already (an event was queued for it meanwhile) is not added twice: a
+    // duplicate entry would outlive the handler's last event. Outside a nested pass the
+    // helper list is empty here and nothing changes.
+    wxENTER_CRIT_SECT(m_handlersWithPendingEventsLocker);
+    for ( size_t n = 0; n < m_handlersWithPendingDelayedEvents.GetCount(); n++ )
+    {
+        wxEvtHandler* const handler = m_handlersWithPendingDelayedEvents[n];
+        if ( m_handlersWithPendingEvents.Index(handler) == wxNOT_FOUND )
+            m_handlersWithPendingEvents.Add(handler);
+    }
+    m_handlersWithPendingDelayedEvents.Clear();
+    wxLEAVE_CRIT_SECT(m_handlersWithPendingEventsLocker);
+
     wxAppBase::ProcessPendingEvents();
 }
 
