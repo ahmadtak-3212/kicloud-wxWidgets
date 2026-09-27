@@ -112,6 +112,10 @@ others stay pending for the main loop. The yield repaints only when the mask
 has `wxEVT_CATEGORY_UI`, and the wx base sends idle events only for
 `wxEVT_CATEGORY_ALL`, once. KiCad's `DrainPendingEvents()` and the generic
 progress dialog therefore return with, for example, a CallAfter still pending.
+A handler that such a yield runs may yield again. The inner pass over the
+pending events first puts back the handlers the outer pass set aside
+(`wxApp::ProcessPendingEvents()`); wx's base class would refuse it with an
+assertion that leaves its pending-events lock entered.
 Due timers from the mailbox run inside a yield only right after the calling
 chain slept at the same dispatch depth: KiCad's RunSynchronousAction spin,
 `wxYield(); wxMilliSleep(1);`. The sleep is noted by `wxWasmNoteSleep()`, which
