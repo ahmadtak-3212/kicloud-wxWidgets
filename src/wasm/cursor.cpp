@@ -254,6 +254,19 @@ wxCursor::wxCursor(int cursorType)
 
 void wxCursor::Install() const
 {
+    // KICLOUD: an invalid cursor means the default pointer, as wxSetCursor(wxNullCursor) does in
+    // the other ports. wxEndBusyCursor() restores the cursor saved by the first
+    // wxBeginBusyCursor(), which is invalid until a cursor was ever set; reading its null ref data
+    // is undefined behaviour and crashed the schematic editor's project load in -O2 builds
+    // (a JS exception inside ~wxBusyCursor -> std::terminate). See docs/patches.md (B1.6).
+    if ( !IsOk() )
+    {
+        EM_ASM({
+            setCursor($0);
+        }, HTML5_CURSOR_TYPE_POINTER);
+        return;
+    }
+
     HTML5CursorType cursorType = M_CURSORDATA->GetCursorType();
     //printf("setcursor: %d\n", cursorType);
 
