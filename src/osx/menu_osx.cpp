@@ -156,6 +156,14 @@ bool wxMenu::DoInsertOrAppend(wxMenuItem *item, size_t pos)
     // if we're already attached to the menubar, we must update it
     if ( IsAttached() && GetMenuBar()->IsAttached() )
     {
+        if ( item->IsSubMenu() )
+        {
+            item->GetSubMenu()->SetupBitmaps();
+        }
+        if ( !item->IsSeparator() )
+        {
+            item->UpdateItemBitmap();
+        }
         GetMenuBar()->Refresh();
     }
 #endif // wxUSE_MENUBAR
@@ -410,17 +418,38 @@ void wxMenu::HandleMenuClosed()
 void wxMenu::Attach(wxMenuBarBase *menubar)
 {
     wxMenuBase::Attach(menubar);
+
+    if (menubar->IsAttached())
+    {
+        SetupBitmaps();
+    }
 }
 #endif
 
 void wxMenu::SetInvokingWindow(wxWindow* win)
 {
     wxMenuBase::SetInvokingWindow(win);
+
+    if ( win )
+        SetupBitmaps();
 }
 
 void wxMenu::SetupBitmaps()
 {
-    // unused, kept for ABI compatibility
+    for ( wxMenuItemList::compatibility_iterator node = m_items.GetFirst();
+          node;
+          node = node->GetNext() )
+    {
+        wxMenuItem *item = node->GetData();
+        if ( item->IsSubMenu() )
+        {
+            item->GetSubMenu()->SetupBitmaps();
+        }
+        if ( !item->IsSeparator() )
+        {
+            item->UpdateItemBitmap();
+        }
+    }
 }
 
 #if wxUSE_MENUBAR
@@ -475,8 +504,8 @@ static wxMenu *CreateAppleMenu()
     if ( wxApp::s_macPreferencesMenuItemId != wxID_NONE )
     {
         appleMenu->Append( wxApp::s_macPreferencesMenuItemId,
-                           wxString::Format("%s\tCtrl+,",
-                                            wxGETTEXT_IN_CONTEXT("macOS menu item", "Preferences...")) );
+                           wxGETTEXT_IN_CONTEXT("macOS menu item", "Preferences...")
+                           + "\tCtrl+," );
         appleMenu->AppendSeparator();
     }
 
@@ -493,8 +522,7 @@ static wxMenu *CreateAppleMenu()
         hideLabel = wxGETTEXT_IN_CONTEXT("macOS menu item", "Hide Application");
     appleMenu->Append( wxID_OSX_HIDE, hideLabel + "\tCtrl+H" );
     appleMenu->Append( wxID_OSX_HIDEOTHERS,
-                       wxString::Format("%s\tAlt+Ctrl+H",
-                                        wxGETTEXT_IN_CONTEXT("macOS menu item", "Hide Others")) );
+                       wxGETTEXT_IN_CONTEXT("macOS menu item", "Hide Others")+"\tAlt+Ctrl+H" );
     appleMenu->Append( wxID_OSX_SHOWALL,
                        wxGETTEXT_IN_CONTEXT("macOS menu item", "Show All") );
     appleMenu->AppendSeparator();
@@ -665,12 +693,17 @@ wxString wxMenuBar::GetMenuLabel(size_t pos) const
 
 void wxMenuBar::SetupBitmaps()
 {
-    // unused, kept for ABI compatibility
+    for ( wxMenuList::const_iterator it = m_menus.begin(); it != m_menus.end(); ++it )
+    {
+        (*it)->SetupBitmaps();
+    }
 }
 
 void wxMenuBar::Attach(wxFrame *frame)
 {
     wxMenuBarBase::Attach(frame);
+
+    SetupBitmaps();
 }
 
 // ---------------------------------------------------------------------------

@@ -1030,17 +1030,7 @@ void wxNotebook::OnNavigationKey(wxNavigationKeyEvent& event)
             // focus is currently on notebook tab and should leave
             // it backwards (Shift-TAB)
             event.SetCurrentFocus(this);
-            if ( !parent->HandleWindowEvent(event) )
-            {
-                // if the parent didn't handle this event, the notebook
-                // must be its only child accepting focus, so let the page
-                // handle it to wrap around to the last control in tab order
-                if ( m_selection != wxNOT_FOUND )
-                {
-                    wxWindow* page = m_pages[m_selection];
-                    page->HandleWindowEvent(event);
-                }
-            }
+            parent->HandleWindowEvent(event);
         }
         else if ( isFromParent || isFromSelf )
         {
@@ -1080,14 +1070,8 @@ void wxNotebook::OnNavigationKey(wxNavigationKeyEvent& event)
             else if ( parent )
             {
                 event.SetCurrentFocus(this);
-                if ( !parent->HandleWindowEvent(event) )
-                {
-                    // if the parent didn't handle this event, the notebook
-                    // must be its only child accepting focus, so take it
-                    event.Skip(false);
-                    SetFocus();
-                }
-             }
+                parent->HandleWindowEvent(event);
+            }
         }
     }
 }

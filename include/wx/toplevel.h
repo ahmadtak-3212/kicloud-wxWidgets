@@ -396,7 +396,6 @@ protected:
 #elif defined(__WXQT__)
     #include "wx/qt/toplevel.h"
 #define wxTopLevelWindowNative wxTopLevelWindowQt
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/toplevel.h (W3.0P): wxWASM top-level window dispatch */
 #elif defined(__WXWASM__)
     #include "wx/wasm/toplevel.h"
 #define wxTopLevelWindowNative wxTopLevelWindowWasm

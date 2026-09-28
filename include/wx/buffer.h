@@ -240,13 +240,7 @@ protected:
     {
         CharType *dst = (CharType*)malloc(sizeof(CharType) * (len + 1));
         if ( dst )
-        {
-            memcpy(dst, src, sizeof(CharType) * len);
-
-            // Make sure the buffer is NUL-terminated, even if the source
-            // string isn't.
-            dst[len] = (CharType)0;
-        }
+            memcpy(dst, src, sizeof(CharType) * (len + 1));
         return dst;
     }
 

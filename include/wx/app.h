@@ -136,12 +136,6 @@ public:
     // Called from wxExit() function, should terminate the application a.s.a.p.
     virtual void Exit();
 
-    // Allows to set a custom process exit code if OnInit() returns false.
-#if wxABI_VERSION >= 30207
-    void SetErrorExitCode(int code);
-    int GetErrorExitCode() const;
-#endif // wxABI_VERSION >= 3.2.7
-
 
     // application info: name, description, vendor
     // -------------------------------------------
@@ -765,7 +759,6 @@ protected:
     #include "wx/osx/app.h"
 #elif defined(__WXQT__)
     #include "wx/qt/app.h"
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/app.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
 #elif defined(__WXWASM__)
     #include "wx/wasm/app.h"
 #endif
@@ -875,7 +868,7 @@ public:
     #define wxIMPLEMENT_WXWIN_MAIN          wxIMPLEMENT_WXWIN_MAIN_CONSOLE
 #endif // defined(wxIMPLEMENT_WXWIN_MAIN)
 
-#if defined(__WXUNIVERSAL__) && wxUSE_GUI
+#ifdef __WXUNIVERSAL__
     #include "wx/univ/theme.h"
 
     #ifdef wxUNIV_DEFAULT_THEME

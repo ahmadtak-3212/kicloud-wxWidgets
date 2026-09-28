@@ -20,8 +20,6 @@
 #endif
 
 #include "wx/osx/private.h"
-#include "wx/osx/private/available.h"
-
 
 wxChoice::~wxChoice()
 {
@@ -246,13 +244,8 @@ wxSize wxChoice::DoGetBestSize() const
     // computed by the base class method to account for the arrow.
     const int lbHeight = wxWindow::DoGetBestSize().y;
 
-    int padding = 4 * GetCharWidth();
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_VERSION_26_0
-    if (WX_IS_MACOS_AVAILABLE(26, 0))
-        padding += 2 * GetCharWidth() - 1;
-#endif
-
-    return wxSize(wxChoiceBase::DoGetBestSize().x + padding, lbHeight);
+    return wxSize(wxChoiceBase::DoGetBestSize().x + 4*GetCharWidth(),
+                  lbHeight);
 }
 
 #endif // wxUSE_CHOICE

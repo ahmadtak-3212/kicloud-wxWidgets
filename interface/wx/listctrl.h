@@ -555,20 +555,12 @@ public:
 
     /**
         Gets information about this column.
-
         See SetItem() for more information.
 
         @beginWxPerlOnly
         In wxPerl this method takes only the @a col parameter and
         returns a @c Wx::ListItem (or @c undef).
         @endWxPerlOnly
-
-        @param col The column index. It must be valid, i.e. positive or 0 and
-            strictly less than GetColumnCount(). The function asserts if this
-            is not the case.
-        @param item Output parameter filled with the information about the
-            column on successful return.
-        @return Always @true if the column index is valid.
     */
     bool GetColumn(int col, wxListItem& item) const;
 
@@ -892,10 +884,9 @@ public:
 
         If @a ptrSubItem is not @NULL and the wxListCtrl is in the report
         mode the subitem (or column) number will also be provided.
-        This feature is available since version 3.2.7 in the generic control;
-        in earlier versions the value stored in @a ptrSubItem will be always -1.
-        Under wxMSW, the feature is available since version 2.7.0, and requires
-        at least comctl32.dll of version 4.70 on the host system.
+        This feature is only available in version 2.7.0 or higher and is currently only
+        implemented under wxMSW and requires at least comctl32.dll of version 4.70 on
+        the host system or the value stored in @a ptrSubItem will be always -1.
         To compile this feature into wxWidgets library you need to have access to
         commctrl.h of version 4.70 that is provided by Microsoft.
 

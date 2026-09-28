@@ -94,7 +94,6 @@ protected:
     #include "wx/osx/statline.h"
 #elif defined(__WXQT__)
     #include "wx/qt/statline.h"
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/statline.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
 #elif defined(__WXWASM__)
     #include "wx/wasm/statline.h"
 #else // use generic implementation for all other platforms

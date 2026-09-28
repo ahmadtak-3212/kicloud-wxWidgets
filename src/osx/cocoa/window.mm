@@ -456,7 +456,7 @@ void wxWidgetCocoaImpl::SetupKeyEvent(wxKeyEvent &wxevent , NSEvent * nsEvent, N
     wxevent.m_rawCode = [nsEvent keyCode];
     wxevent.m_rawFlags = modifiers;
 
-    wxevent.SetTimestamp( static_cast<long>([nsEvent timestamp] * 1000) ) ;
+    wxevent.SetTimestamp( (int)([nsEvent timestamp] * 1000) ) ;
     wxevent.m_isRepeat = (eventType == NSKeyDown) && [nsEvent isARepeat];
 
     wxString chars;
@@ -616,7 +616,7 @@ wxWidgetCocoaImpl::TranslateMouseEvent( NSEvent * nsEvent )
     wxevent->m_rawControlDown = modifiers & NSControlKeyMask;
     wxevent->m_altDown = modifiers & NSAlternateKeyMask;
     wxevent->m_controlDown = modifiers & NSCommandKeyMask;
-    wxevent->SetTimestamp( static_cast<long>([nsEvent timestamp] * 1000) ) ;
+    wxevent->SetTimestamp( (int)([nsEvent timestamp] * 1000) ) ;
 
     UInt32 mouseChord = 0;
 
@@ -2601,9 +2601,12 @@ wxWidgetImpl( peer, flags )
     // check if the user wants to create the control initially hidden
     if ( !peer->IsShown() )
         SetVisibility(false);
-
-    if ( IsUserPane() )
-        ClipsToBounds(true);
+    
+    // gc aware handling
+    if ( m_osxView )
+        CFRetain(m_osxView);
+    [m_osxView release];
+    m_osxView.clipsToBounds = YES;
 }
 
 
@@ -2636,10 +2639,11 @@ wxWidgetCocoaImpl::~wxWidgetCocoaImpl()
         if ( sv != nil )
             [m_osxView removeFromSuperview];
     }
+    // gc aware handling
+    if ( m_osxView )
+        CFRelease(m_osxView);
 
     wxCocoaGestures::EraseForObject(this);
-
-    [m_osxView release];
 }
 
 void wxWidgetCocoaImpl::BeginNativeKeyDownEvent( NSEvent* event )
@@ -3869,7 +3873,7 @@ bool wxWidgetCocoaImpl::DoHandleCharEvent(NSEvent *event, NSString *text)
                 wxevent.SetId(peer->GetId());
 
                 if ( event )
-                    wxevent.SetTimestamp( static_cast<long>([event timestamp] * 1000) ) ;
+                    wxevent.SetTimestamp( (int)([event timestamp] * 1000) ) ;
             }
             
             result = peer->OSXHandleKeyEvent(wxevent) || result;
@@ -4146,14 +4150,6 @@ void wxWidgetCocoaImpl::UseClippingView(bool clip)
             m_osxClipView = [[wxNSClipView alloc] initWithFrame: m_osxView.bounds];
             [(NSClipView*)m_osxClipView setDrawsBackground: NO];
             [m_osxView addSubview:m_osxClipView];
-            [m_osxClipView release];
-
-            // add tracking for this clipview as well
-
-            NSTrackingAreaOptions options = NSTrackingMouseEnteredAndExited|NSTrackingCursorUpdate|NSTrackingMouseMoved|NSTrackingActiveAlways|NSTrackingInVisibleRect;
-            NSTrackingArea* area = [[NSTrackingArea alloc] initWithRect: NSZeroRect options: options owner: m_osxClipView userInfo: nil];
-            [m_osxClipView addTrackingArea: area];
-            [area release];
 
             wxWidgetImpl::Associate( m_osxClipView, this ) ;
 
@@ -4161,11 +4157,6 @@ void wxWidgetCocoaImpl::UseClippingView(bool clip)
         }
     }
 #endif
-}
-
-void wxWidgetCocoaImpl::ClipsToBounds(bool clip)
-{
-    m_osxView.clipsToBounds = clip;
 }
 
 

@@ -76,7 +76,6 @@ public:
     #include "wx/osx/popupwin.h"
 #elif defined(__WXQT__)
     #include "wx/qt/popupwin.h"
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/popupwin.h (W3.0P): wxWASM popup window dispatch; the port dismisses transient popups from its own mouse pipeline */
 #elif defined(__WXWASM__)
     #include "wx/wasm/popupwin.h"
 #else
@@ -203,7 +202,6 @@ protected:
     // these classes may call our DismissAndNotify()
     friend class wxPopupWindowHandler;
     friend class wxPopupFocusHandler;
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #ifdef __WXWASM__
     // The wasm port has no pointer grab: it dismisses transient popups from
     // its mouse pipeline / SetFocus() (src/wasm/window.cpp), the same

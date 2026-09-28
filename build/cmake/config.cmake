@@ -92,7 +92,7 @@ function(wx_write_config_inplace)
         "wx-config-inplace.in"
         "inplace-${TOOLCHAIN_FULLNAME}"
         )
-    if(WIN32_MSVC_NAMING OR NOT wxBUILD_INSTALL_USE_SYMLINK)
+    if(WIN32_MSVC_NAMING)
         set(COPY_CMD copy)
     else()
         set(COPY_CMD create_symlink)
@@ -100,21 +100,18 @@ function(wx_write_config_inplace)
     execute_process(
         COMMAND
         "${CMAKE_COMMAND}" -E ${COPY_CMD}
-        "${wxCONFIG_DIR}/inplace-${TOOLCHAIN_FULLNAME}"
+        "${wxBINARY_DIR}/lib/wx/config/inplace-${TOOLCHAIN_FULLNAME}"
         "${wxBINARY_DIR}/wx-config"
         )
 endfunction()
 
 function(wx_write_config)
-    wx_get_install_dir(include)
-    wx_get_install_platform_dir(library)
-    wx_get_install_platform_dir(runtime)
 
     set(prefix ${CMAKE_INSTALL_PREFIX})
     set(exec_prefix "\${prefix}")
-    set(includedir "\${prefix}/${include_dir}")
-    set(libdir "\${exec_prefix}/${library_dir}")
-    set(bindir "\${exec_prefix}/${runtime_dir}")
+    set(includedir "\${prefix}/include")
+    set(libdir "\${exec_prefix}/lib")
+    set(bindir "\${exec_prefix}/bin")
 
     if(wxBUILD_MONOLITHIC)
         set(MONOLITHIC 1)
@@ -146,12 +143,15 @@ function(wx_write_config)
     set(STD_BASE_LIBS_ALL xml net base)
     set(STD_GUI_LIBS_ALL xrc html qa adv core)
     foreach(lib IN ITEMS xrc webview stc richtext ribbon propgrid aui gl media html qa adv core xml net base)
-        if (wx${lib} IN_LIST wxLIB_TARGETS)
+        list(FIND wxLIB_TARGETS wx${lib} hasLib)
+        if (hasLib GREATER -1)
             wx_string_append(BUILT_WX_LIBS "${lib} ")
-            if (${lib} IN_LIST STD_BASE_LIBS_ALL)
+            list(FIND STD_BASE_LIBS_ALL ${lib} index)
+            if (index GREATER -1)
                 wx_string_append(STD_BASE_LIBS "${lib} ")
             endif()
-            if (${lib} IN_LIST STD_GUI_LIBS_ALL)
+            list(FIND STD_GUI_LIBS_ALL ${lib} index)
+            if (index GREATER -1)
                 wx_string_append(STD_GUI_LIBS "${lib} ")
             endif()
         endif()
@@ -163,14 +163,13 @@ function(wx_write_config)
     set(WX_RELEASE ${wxMAJOR_VERSION}.${wxMINOR_VERSION})
     set(WX_VERSION ${wxVERSION})
     set(WX_SUBVERSION ${wxVERSION}.0)
-    wx_get_flavour(WX_FLAVOUR "-")
-    wx_get_flavour(lib_flavour "_")
+    set(WX_FLAVOUR)
     set(TOOLKIT_DIR ${wxBUILD_TOOLKIT})
     set(TOOLKIT_VERSION)
     set(WIDGET_SET ${wxBUILD_WIDGETSET})
     set(TOOLCHAIN_NAME "${TOOLKIT_DIR}${TOOLKIT_VERSION}${WIDGET_SET}${lib_unicode_suffix}-${WX_RELEASE}")
-    set(WX_LIBRARY_BASENAME_GUI "wx_${TOOLKIT_DIR}${TOOLKIT_VERSION}${WIDGET_SET}${lib_unicode_suffix}${lib_flavour}")
-    set(WX_LIBRARY_BASENAME_NOGUI "wx_base${lib_unicode_suffix}${lib_flavour}")
+    set(WX_LIBRARY_BASENAME_GUI "wx_${TOOLKIT_DIR}${TOOLKIT_VERSION}${WIDGET_SET}${lib_unicode_suffix}")
+    set(WX_LIBRARY_BASENAME_NOGUI "wx_base${lib_unicode_suffix}")
 
     wx_get_dependencies(WXCONFIG_LIBS base)
     wx_get_dependencies(EXTRALIBS_GUI core)
@@ -203,20 +202,10 @@ function(wx_write_config)
     string(STRIP "${WXCONFIG_CPPFLAGS}" WXCONFIG_CPPFLAGS)
     set(WXCONFIG_CXXFLAGS ${WXCONFIG_CFLAGS})
     set(WXCONFIG_LDFLAGS_GUI)
-    if(WXWASM)
-        # KICLOUD: W3.0P (kicloud/docs/patches.md): the wxWASM port's link
-        # interface, printed by `wx-config --libs` for GUI libraries so every
-        # program gets the same: its JavaScript runtime as --pre-js files
-        # (installed by lib/core). No -s setting: the runtime pieces that
-        # JavaScript uses are declared in the port itself (EM_JS_DEPS in
-        # src/wasm/app.cpp), because a program's own list setting would replace
-        # a list printed here. ${prefix} is wx-config's install prefix.
-        set(WXCONFIG_LDFLAGS_GUI "--pre-js=\${prefix}/share/wxwidgets/wasm/wx.js --pre-js=\${prefix}/share/wxwidgets/wasm/wx-dom.js --pre-js=\${prefix}/share/wxwidgets/wasm/scheduler.js")
-    endif()
     set(WXCONFIG_RESFLAGS)
     set(WXCONFIG_RPATH "-Wl,-rpath,\$libdir")
     set(LDFLAGS_GL)
-    get_filename_component(RESCOMP "${CMAKE_RC_COMPILER}" NAME_WE)
+    set(RESCOMP)
 
     wx_configure_script(
         "wx-config.in"

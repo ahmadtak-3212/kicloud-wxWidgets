@@ -612,7 +612,6 @@ void wxMouseEvent::Assign(const wxMouseEvent& event)
     m_aux1Down = event.m_aux1Down;
     m_aux2Down = event.m_aux2Down;
 
-    // KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/event.cpp (W3.0P): wxMouseEvent::Assign() also copies m_clickCount (lost on copies otherwise)
     m_clickCount = event.m_clickCount;
 
     m_wheelRotation = event.m_wheelRotation;

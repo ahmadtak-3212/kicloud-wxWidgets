@@ -71,24 +71,6 @@ WXDLLIMPEXP_BASE CFURLRef wxOSXCreateURLFromFileSystemPath( const wxString& path
 
 #if !wxOSX_USE_IPHONE
 #include <ApplicationServices/ApplicationServices.h>
-
-#if __MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_12
-    #define NSCompositingOperationClear             NSCompositeClear
-    #define NSCompositingOperationCopy              NSCompositeCopy
-    #define NSCompositingOperationSourceOver        NSCompositeSourceOver
-    #define NSCompositingOperationSourceIn          NSCompositeSourceIn
-    #define NSCompositingOperationSourceOut         NSCompositeSourceOut
-    #define NSCompositingOperationSourceAtop        NSCompositeSourceAtop
-    #define NSCompositingOperationDestinationOver   NSCompositeDestinationOver
-    #define NSCompositingOperationDestinationIn     NSCompositeDestinationIn
-    #define NSCompositingOperationDestinationOut    NSCompositeDestinationOut
-    #define NSCompositingOperationDestinationAtop   NSCompositeDestinationAtop
-    #define NSCompositingOperationExclusion         NSCompositeExclusion
-    #define NSCompositingOperationPlusLighter       NSCompositePlusLighter
-    #define NSCompositingOperationDifference        NSCompositeDifference
-    #define NSCompositingOperationSourceOver        NSCompositeSourceOver
-#endif
-
 #endif
 
 #include "wx/bmpbndl.h"
@@ -178,7 +160,7 @@ public :
     }
 
     virtual ~wxMenuItemImpl() ;
-    virtual void SetBitmap( const wxBitmapBundle& bitmap ) = 0;
+    virtual void SetBitmap( const wxBitmap& bitmap ) = 0;
     virtual void Enable( bool enable ) = 0;
     virtual void Check( bool check ) = 0;
     virtual void SetLabel( const wxString& text, wxAcceleratorEntry *entry ) = 0;
@@ -383,8 +365,6 @@ public :
     virtual void        InstallEventHandler( WXWidget control = NULL ) = 0;
 
     virtual bool        EnableTouchEvents(int eventsMask) = 0;
-
-    virtual void        ClipsToBounds(bool clip);
 
     // scrolling views need a clip subview that acts as parent for native children
     // (except for the scollbars) which are children of the view itself

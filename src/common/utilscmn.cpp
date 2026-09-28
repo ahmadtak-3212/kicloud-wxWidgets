@@ -1051,7 +1051,6 @@ bool wxSetDetectableAutoRepeat( bool WXUNUSED(flag) )
 // Launch default browser
 // ----------------------------------------------------------------------------
 
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/utilscmn.cpp (W3.0P): wxWASM implements the port-specific utils (src/wasm)
 #if defined(__WINDOWS__) && !defined(__WXQT__) || \
     defined(__WXX11__) || defined(__WXGTK__) || defined(__WXMOTIF__) || \
     defined(__WXOSX__) || defined(__WXWASM__)
@@ -1404,7 +1403,7 @@ wxVersionInfo wxGetLibraryVersionInfo()
 #if !wxUSE_REPRODUCIBLE_BUILD
                wxS("compiled at %s %s\n\n")
 #endif
-               wxS("Runtime version of toolkit used is %d.%d.%d.\n"),
+               wxS("Runtime version of toolkit used is %d.%d.\n"),
                wxPlatformInfo::Get().GetPortIdName(),
                ver,
 #if wxUSE_UNICODE_UTF8
@@ -1426,8 +1425,7 @@ wxVersionInfo wxGetLibraryVersionInfo()
                __TTIME__,
 #endif
                wxPlatformInfo::Get().GetToolkitMajorVersion(),
-               wxPlatformInfo::Get().GetToolkitMinorVersion(),
-               wxPlatformInfo::Get().GetToolkitMicroVersion()
+               wxPlatformInfo::Get().GetToolkitMinorVersion()
               );
 
 #ifdef __WXGTK__
@@ -1447,7 +1445,7 @@ wxVersionInfo wxGetLibraryVersionInfo()
                          wxMINOR_VERSION,
                          wxRELEASE_NUMBER,
                          msg,
-                         wxS("Copyright (c) 1992-2026 wxWidgets team"));
+                         wxS("Copyright (c) 1992-2024 wxWidgets team"));
 }
 
 void wxInfoMessageBox(wxWindow* parent)

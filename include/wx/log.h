@@ -144,7 +144,7 @@ public:
     // default ctor creates an uninitialized object
     wxLogRecordInfo()
     {
-        memset(static_cast<void*>(this), 0, sizeof(*this));
+        memset(this, 0, sizeof(*this));
     }
 
     // normal ctor, used by wxLogger specifies the location of the log
@@ -278,7 +278,7 @@ public:
 private:
     void Copy(const wxLogRecordInfo& other)
     {
-        memcpy(static_cast<void*>(this), &other, sizeof(*this));
+        memcpy(this, &other, sizeof(*this));
         if ( other.m_data )
            m_data = new ExtraData(*other.m_data);
     }
@@ -1472,13 +1472,13 @@ wxSafeShowMessage(const wxString& title, const wxString& text);
 #ifdef __VISUALC__
     #define wxLogApiError(api, rc)                                            \
         wxLogDebug(wxT("%s(%d): '%s' failed with error 0x%08lx (%s)."),       \
-                   __TFILE__, __LINE__, api,                                  \
+                   __FILE__, __LINE__, api,                                   \
                    (long)rc, wxSysErrorMsgStr(rc))
 #else // !VC++
     #define wxLogApiError(api, rc)                                            \
         wxLogDebug(wxT("In file %s at line %d: '%s' failed with ")            \
                    wxT("error 0x%08lx (%s)."),                                \
-                   __TFILE__, __LINE__, api,                                  \
+                   __FILE__, __LINE__, api,                                   \
                    (long)rc, wxSysErrorMsgStr(rc))
 #endif // VC++/!VC++
 

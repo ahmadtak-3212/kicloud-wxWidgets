@@ -137,7 +137,6 @@ enum wxStockCursor
     wxCURSOR_BASED_ARROW_DOWN,
 #endif // X11
     wxCURSOR_ARROWWAIT,
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/gdicmn.h (W3.0P): wxWASM has real open/closed hand cursors (CSS grab/grabbing), XPM icons/bitmaps, and display scale factor helpers */
 #if defined(__WXMAC__) || defined(__WXWASM__)
     wxCURSOR_OPEN_HAND,
     wxCURSOR_CLOSED_HAND,
@@ -150,7 +149,6 @@ enum wxStockCursor
     #define wxCURSOR_DEFAULT        wxCURSOR_ARROW
 #endif
 
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #if !defined(__WXMAC__) && !defined(__WXWASM__)
     // TODO CS supply openhand and closedhand cursors
     #define wxCURSOR_OPEN_HAND      wxCURSOR_HAND
@@ -229,7 +227,6 @@ enum wxEllipsizeMode
 #elif defined(__WXQT__)
     // Initialize from an included XPM
     #define wxICON(X) wxIcon( X##_xpm )
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #elif defined(__WXWASM__)
     // Initialize from an included XPM
     #define wxICON(X) wxIcon( X##_xpm )
@@ -244,7 +241,6 @@ enum wxEllipsizeMode
 
 #if defined(__WINDOWS__) && wxUSE_WXDIB
     #define wxBITMAP(name) wxBitmap(wxT(#name), wxBITMAP_TYPE_BMP_RESOURCE)
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #elif defined(__WXGTK__)   || \
       defined(__WXMOTIF__) || \
       defined(__WXX11__)   || \
@@ -287,7 +283,7 @@ enum wxEllipsizeMode
 // wxSize
 // ---------------------------------------------------------------------------
 
-class WXDLLIMPEXP_CORE wxWARN_UNUSED wxSize
+class WXDLLIMPEXP_CORE wxSize
 {
 public:
     // members are public for compatibility, don't use them directly.
@@ -464,7 +460,7 @@ inline wxSize operator*(double i, const wxSize& s)
 // Point classes: with real or integer coordinates
 // ---------------------------------------------------------------------------
 
-class WXDLLIMPEXP_CORE wxWARN_UNUSED wxRealPoint
+class WXDLLIMPEXP_CORE wxRealPoint
 {
 public:
     double x;
@@ -582,7 +578,7 @@ inline wxRealPoint operator*(double i, const wxRealPoint& s)
 // wxPoint: 2D point with integer coordinates
 // ----------------------------------------------------------------------------
 
-class WXDLLIMPEXP_CORE wxWARN_UNUSED wxPoint
+class WXDLLIMPEXP_CORE wxPoint
 {
 public:
     int x, y;
@@ -738,7 +734,7 @@ WX_DECLARE_LIST_WITH_DECL(wxPoint, wxPointList, class WXDLLIMPEXP_CORE);
 // wxRect
 // ---------------------------------------------------------------------------
 
-class WXDLLIMPEXP_CORE wxWARN_UNUSED wxRect
+class WXDLLIMPEXP_CORE wxRect
 {
 public:
     wxRect()
@@ -1112,7 +1108,6 @@ extern bool WXDLLIMPEXP_CORE wxColourDisplay();
 extern int WXDLLIMPEXP_CORE wxDisplayDepth();
 #define wxGetDisplayDepth wxDisplayDepth
 
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #ifdef __WXWASM__
 // WASM display scale factors
 extern double wxDisplayScaleFactor();

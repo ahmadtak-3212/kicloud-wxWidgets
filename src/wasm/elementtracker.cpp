@@ -6,7 +6,6 @@
 //              wx.js) so the Playwright harness can find and click them.
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/elementtracker.cpp (W3.0P; kicloud/docs/provenance.md)
 
 // For compilers that support precompilation, includes "wx.h".
 #include "wx/wxprec.h"

@@ -152,7 +152,6 @@ private:
     #include "wx/osx/accel.h"
 #elif defined(__WXQT__)
     #include "wx/qt/accel.h"
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/accel.h (W3.0P): wxWASM uses the generic wxAcceleratorTable */
 #elif defined(__WXWASM__)
     #include "wx/generic/accel.h"
 #endif

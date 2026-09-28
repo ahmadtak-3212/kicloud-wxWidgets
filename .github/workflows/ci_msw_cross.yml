@@ -71,7 +71,7 @@ jobs:
       matrix:
         include:
           - name: wxMSW 64 bits
-            debian_release: stable
+            debian_release: testing
             configure_flags: --enable-stl --disable-compat30
           - name: wxMSW 32 bits
             # Testing doesn't have 32 bit support any more.
@@ -137,12 +137,12 @@ jobs:
           echo "wxTEST_RUNNER=wine" >> $GITHUB_ENV
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v3
         with:
           submodules: 'recursive'
 
       - name: Install CCache
-        uses: hendrikmuhs/ccache-action@v1.2.23
+        uses: hendrikmuhs/ccache-action@v1.2.3
         with:
           key: ${{ matrix.name }}
 

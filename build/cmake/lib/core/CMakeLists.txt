@@ -28,7 +28,6 @@ if(WXMSW)
     endif()
 elseif(WXGTK)
     if(WXGTK2)
-        set(GTK2_LOWLEVEL_HDR ${GTK_LOWLEVEL_HDR})
         wx_append_sources(CORE_SRC GTK2_LOWLEVEL)
         wx_append_sources(CORE_SRC GTK2)
     else()
@@ -48,33 +47,12 @@ elseif(WXOSX_COCOA)
     wx_append_sources(CORE_SRC OSX_COCOA)
 elseif(WXOSX_IPHONE)
     wx_append_sources(CORE_SRC OSX_LOWLEVEL)
-    wx_append_sources(CORE_SRC OSX_SHARED)
     wx_append_sources(CORE_SRC OSX_IPHONE)
 elseif(WXQT)
     wx_append_sources(CORE_SRC QT)
-    if(UNIX)
-        wx_append_sources(CORE_SRC QT_UNIX)
-    elseif(WIN32)
+    if(WIN32)
         wx_append_sources(CORE_SRC QT_WIN32)
     endif()
-elseif(WXX11)
-    wx_append_sources(CORE_SRC X11_LOWLEVEL)
-elseif(WXWASM)
-    # KICLOUD: W3.1 wxWASM port sources (kicloud/docs/patches.md): the
-    # low-level classes (app, event loop, DC, bitmap, ...) and the native DOM
-    # controls, listed in build/files like the other ports.
-    wx_append_sources(CORE_SRC WASM_LOWLEVEL)
-    wx_append_sources(CORE_SRC WASM)
-    # KICLOUD: W3.0P (kicloud/docs/patches.md): the port's JavaScript runtime,
-    # linked into every wxWASM program with --pre-js (src/wasm/README.md):
-    # wx.js (element registry, JS helpers), wx-dom.js (DOM controls) and
-    # scheduler.js (JSPI scheduler/wait registry). Installed next to the
-    # libraries' data so consumers find them from the install prefix.
-    install(FILES
-        "${wxSOURCE_DIR}/src/wasm/js/wx.js"
-        "${wxSOURCE_DIR}/src/wasm/js/wx-dom.js"
-        "${wxSOURCE_DIR}/src/wasm/js/scheduler.js"
-        DESTINATION "share/wxwidgets/wasm")
 endif()
 
 wx_add_library(wxcore ${CORE_SRC})
@@ -82,12 +60,10 @@ foreach(lib JPEG PNG TIFF NANOSVG)
     if(${lib}_LIBRARIES)
         wx_lib_link_libraries(wxcore PRIVATE ${${lib}_LIBRARIES})
     endif()
-    # When using built-in versions of the libraries, their include directories
-    # must come before the system ones which could be used by the toolkit.
     if(${lib}_INCLUDE_DIRS)
-        wx_lib_include_directories_before(wxcore ${${lib}_INCLUDE_DIRS})
+        wx_lib_include_directories(wxcore ${${lib}_INCLUDE_DIRS})
     elseif(${lib}_INCLUDE_DIR)
-        wx_lib_include_directories_before(wxcore ${${lib}_INCLUDE_DIR})
+        wx_lib_include_directories(wxcore ${${lib}_INCLUDE_DIR})
     endif()
 endforeach()
 if(wxUSE_NANOSVG STREQUAL "sys" AND wxUSE_NANOSVG_EXTERNAL_ENABLE_IMPL)

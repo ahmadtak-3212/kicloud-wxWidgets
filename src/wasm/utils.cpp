@@ -6,7 +6,6 @@
 // Copyright:   (c) 2022 Adam Hilss
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/utils.cpp (W3.0P; kicloud/docs/provenance.md)
 #include "wx/wxprec.h"
 
 #ifndef WX_PRECOMP
@@ -33,14 +32,66 @@
     delete [] buffer; \
   }
 
-// KICLOUD: W3.0P. pcbjam@8bad5f58e9 defined wxGetOsVersion(), wxCheckOsVersion(),
-// wxGetOsDescription(), wxIsPlatform64Bit() and wxGetCpuArchitectureName() here
-// and removed them from src/unix/utilsunx.cpp under __WXWASM__. Those are wxBase
-// functions, while this file is compiled into wxcore: a base-only consumer of a
-// GUI build (test_base, a console program) would not link, and the base library
-// would differ between the base-only and the GUI configuration (src/wasm/README.md).
-// Their browser versions (from the user agent) live in wxBase instead, in
-// src/unix/utilsunx.cpp under __EMSCRIPTEN__ (kicloud/docs/patches.md).
+// TODO: return os version
+wxOperatingSystemId wxGetOsVersion(int *WXUNUSED(verMaj),
+                                   int *WXUNUSED(verMin),
+                                   int *WXUNUSED(verMicro))
+{
+    wxString osName;
+    GET_JAVASCRIPT_STRING(platformInfo.name, osName);
+
+    wxOperatingSystemId systemId = wxOS_UNKNOWN;
+
+    if (osName == "Windows NT" || osName == "Windows")
+    {
+        systemId = wxOS_WINDOWS_NT;
+    }
+    else if (osName == "Mac OS X" || osName == "Macintosh")
+    {
+        systemId = wxOS_MAC_OSX_DARWIN;
+    }
+    else if (osName == "Linux")
+    {
+        systemId = wxOS_UNIX_LINUX;
+    }
+    else if (osName == "CrOS")
+    {
+        systemId = wxOS_CHROME_OS;
+    }
+
+    return systemId;
+}
+
+bool wxCheckOsVersion(int majorVsn, int minorVsn, int microVsn)
+{
+    // TODO: implement
+    return true;
+}
+
+wxString wxGetOsDescription()
+{
+    wxString browserName;
+    wxString browserVersion;
+    wxString osName;
+    wxString osVersion;
+
+    GET_JAVASCRIPT_STRING(browserInfo.name, browserName);
+    GET_JAVASCRIPT_STRING(browserInfo.version, browserVersion);
+    GET_JAVASCRIPT_STRING(platformInfo.name, osName);
+    GET_JAVASCRIPT_STRING(platformInfo.version, osVersion);
+
+    return browserName + " " + browserVersion + " (" + osName + " " + osVersion + ")";
+}
+
+bool wxIsPlatform64Bit()
+{
+    return false;
+}
+
+wxString wxGetCpuArchitectureName()
+{
+    return "unknown";
+}
 
 wxBrowserInfo wxGetBrowserInfo()
 {

@@ -17,6 +17,9 @@
 #include "wx/dcprint.h"
 
 #ifndef WX_PRECOMP
+    #if defined(__WXMSW__)
+        #include "wx/msw/wrapcdlg.h"
+    #endif // MSW
     #include "wx/utils.h"
     #include "wx/dc.h"
     #include "wx/app.h"
@@ -61,6 +64,12 @@
 #include "wx/generic/prntdlgg.h"
 #include "wx/dcps.h"
 #endif
+
+#ifdef __WXMSW__
+    #ifndef __WIN32__
+        #include <print.h>
+    #endif
+#endif // __WXMSW__
 
 // The value traditionally used as the default max page number and meaning
 // "infinitely many". It should probably be documented and exposed, but for now
@@ -216,7 +225,6 @@ wxDialog *wxNativePrintFactory::CreatePrintSetupDialog( wxWindow *parent,
 
 wxDCImpl* wxNativePrintFactory::CreatePrinterDCImpl( wxPrinterDC *owner, const wxPrintData& data )
 {
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/prntbase.cpp (W3.0P): wxWASM prints through the PostScript DC like the other Unix ports
 #if defined(__WXGTK__) || defined(__WXMOTIF__) || defined(__WXWASM__) || ( defined(__WXUNIVERSAL__) && !defined(__WXMAC__) )
     return new wxPostScriptDCImpl( owner, data );
 #else
@@ -931,7 +939,7 @@ wxScrolledWindow(parent, wxID_ANY, pos, size, style | wxFULL_REPAINT_ON_RESIZE, 
 
     // Use some reasonable default size for this window, roughly proportional
     // to the paper sheet.
-    SetInitialSize(FromDIP(wxSize(600, 750)));
+    SetInitialSize(wxSize(600, 750));
 }
 
 wxPreviewCanvas::~wxPreviewCanvas()
@@ -1932,8 +1940,8 @@ void wxPrintPreviewBase::CalcRects(wxPreviewCanvas *canvas, wxRect& pageRect, wx
     canvas->GetSize(&canvasWidth, &canvasHeight);
 
     float zoomScale = m_currentZoom / 100.0f;
-    float screenPrintableWidth = zoomScale * canvas->FromDIP(m_pageWidth) * m_previewScaleX;
-    float screenPrintableHeight = zoomScale * canvas->FromDIP(m_pageHeight) * m_previewScaleY;
+    float screenPrintableWidth = zoomScale * m_pageWidth * m_previewScaleX;
+    float screenPrintableHeight = zoomScale * m_pageHeight * m_previewScaleY;
 
     wxRect devicePaperRect = m_previewPrintout->GetPaperRectPixels();
     wxCoord devicePrintableWidth, devicePrintableHeight;
@@ -2086,14 +2094,7 @@ bool wxPrintPreviewBase::RenderPage(int pageNum)
 
     if (!m_previewBitmap)
     {
-        m_previewBitmap = new wxBitmap();
-#ifdef wxHAS_DPI_INDEPENDENT_PIXELS
-        m_previewBitmap->CreateWithDIPSize( pageRect.width, pageRect.height,
-                                            m_previewCanvas->GetDPIScaleFactor() );
-#else
-        m_previewBitmap->Create( pageRect.width, pageRect.height );
-        m_previewBitmap->SetScaleFactor( m_previewCanvas->GetDPIScaleFactor() );
-#endif
+        m_previewBitmap = new wxBitmap(pageRect.width, pageRect.height);
 
         if (!m_previewBitmap || !m_previewBitmap->IsOk())
         {
@@ -2131,7 +2132,7 @@ bool wxPrintPreviewBase::DrawBlankPage(wxPreviewCanvas *canvas, wxDC& dc)
     CalcRects(canvas, pageRect, paperRect);
 
     // Draw shadow, allowing for 1-pixel border AROUND the actual paper
-    wxCoord shadowOffset = dc.FromDIP(4);
+    wxCoord shadowOffset = 4;
 
     dc.SetPen(*wxBLACK_PEN);
     dc.SetBrush(*wxBLACK_BRUSH);
@@ -2142,11 +2143,10 @@ bool wxPrintPreviewBase::DrawBlankPage(wxPreviewCanvas *canvas, wxDC& dc)
         shadowOffset, paperRect.height);
 
     // Draw blank page allowing for 1-pixel border AROUND the actual paper
-    dc.SetPen(wxPen(*wxBLACK, dc.FromDIP(1), wxPENSTYLE_SOLID));
+    dc.SetPen(*wxBLACK_PEN);
     dc.SetBrush(*wxWHITE_BRUSH);
-    wxCoord borderOffset = wxRound(dc.GetPen().GetWidth() / 2.0);
-    dc.DrawRectangle(paperRect.x - borderOffset, paperRect.y - borderOffset,
-        paperRect.width + 2*borderOffset, paperRect.height + 2*borderOffset);
+    dc.DrawRectangle(paperRect.x - 1, paperRect.y - 1,
+        paperRect.width + 2, paperRect.height + 2);
 
     return true;
 }

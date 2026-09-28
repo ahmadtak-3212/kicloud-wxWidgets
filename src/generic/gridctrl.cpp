@@ -54,7 +54,6 @@ void wxGridCellRenderer::Draw(wxGrid& grid,
             if ( grid.HasFocus() )
                 clr = grid.GetSelectionBackground();
             else
-                // KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/gridctrl.cpp (W3.0P): selection colour of unfocused grid cells is the highlight colour
                 clr = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
         }
         else
@@ -90,7 +89,6 @@ void wxGridCellRenderer::SetTextColoursAndFont(const wxGrid& grid,
             if ( grid.HasFocus() )
                 clr = grid.GetSelectionBackground();
             else
-                // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
                 clr = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
             dc.SetTextBackground( clr );
             dc.SetTextForeground( grid.GetSelectionForeground() );

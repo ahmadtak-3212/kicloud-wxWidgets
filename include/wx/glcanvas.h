@@ -54,7 +54,7 @@ enum
     WX_GL_CORE_PROFILE,    // use an OpenGL core profile
     WX_GL_MAJOR_VERSION,   // major OpenGL version of the core profile
     WX_GL_MINOR_VERSION,   // minor OpenGL version of the core profile
-    WX_GL_COMPAT_PROFILE,  // use compatible profile (use all versions features)
+    wx_GL_COMPAT_PROFILE,  // use compatible profile (use all versions features)
     WX_GL_FORWARD_COMPAT,  // forward compatible context. OpenGL >= 3.0
     WX_GL_ES2,             // ES or ES2 context.
     WX_GL_DEBUG,           // create a debug context
@@ -63,10 +63,7 @@ enum
     WX_GL_LOSE_ON_RESET,   // if graphics reset, all context state is lost
     WX_GL_RESET_ISOLATION, // protect other apps or share contexts from reset side-effects
     WX_GL_RELEASE_FLUSH,   // on context release, flush pending commands
-    WX_GL_RELEASE_NONE,    // on context release, pending commands are not flushed
-
-    // Old name defined (ironically) for compatibility.
-    wx_GL_COMPAT_PROFILE = WX_GL_COMPAT_PROFILE
+    WX_GL_RELEASE_NONE     // on context release, pending commands are not flushed
 };
 
 #define wxGLCanvasName wxT("GLCanvas")
@@ -335,7 +332,6 @@ public:
     #include "wx/osx/glcanvas.h"
 #elif defined(__WXQT__)
     #include "wx/qt/glcanvas.h"
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/glcanvas.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
 #elif defined(__WXWASM__)
     #include "wx/wasm/glcanvas.h"
 #else

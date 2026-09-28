@@ -28,7 +28,6 @@ public:
           m_shiftDown(shiftDown),
           m_altDown(altDown),
           m_metaDown(metaDown)
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/kbdstate.h (W3.0P): wxWASM distinguishes raw Control from Cmd (macOS browsers), like wxOSX */
 #if defined(__WXOSX__) || defined(__WXWASM__)
           ,m_rawControlDown(false)
 #endif
@@ -49,7 +48,6 @@ public:
         return (m_controlDown ? wxMOD_CONTROL : 0) |
                (m_shiftDown ? wxMOD_SHIFT : 0) |
                (m_metaDown ? wxMOD_META : 0) |
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #if defined(__WXOSX__) || defined(__WXWASM__)
                (m_rawControlDown ? wxMOD_RAW_CONTROL : 0) |
 #endif
@@ -70,7 +68,6 @@ public:
     bool ControlDown() const { return m_controlDown; }
     bool RawControlDown() const
     {
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #if defined(__WXOSX__) || defined(__WXWASM__)
         return m_rawControlDown;
 #else
@@ -97,7 +94,6 @@ public:
     void SetControlDown(bool down) { m_controlDown = down; }
     void SetRawControlDown(bool down)
     {
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #if defined(__WXOSX__) || defined(__WXWASM__)
         m_rawControlDown = down;
 #else
@@ -117,7 +113,6 @@ public:
     bool m_shiftDown       : 1;
     bool m_altDown         : 1;
     bool m_metaDown        : 1;
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #if defined(__WXOSX__) || defined(__WXWASM__)
     bool m_rawControlDown : 1;
 #endif

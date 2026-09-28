@@ -830,6 +830,24 @@ dnl ### begin block 20_COND_TOOLKIT_QT_USE_GUI_1_WXUNIV_0[wx.bkl] ###
         COND_TOOLKIT_QT_USE_GUI_1_WXUNIV_0=""
     fi
     AC_SUBST(COND_TOOLKIT_QT_USE_GUI_1_WXUNIV_0)
+dnl ### begin block 20_COND_TOOLKIT_WASM[wx.bkl] ###
+    COND_TOOLKIT_WASM="#"
+    if test "x$TOOLKIT" = "xWASM" ; then
+        COND_TOOLKIT_WASM=""
+    fi
+    AC_SUBST(COND_TOOLKIT_WASM)
+dnl ### begin block 20_COND_TOOLKIT_WASM_USE_GUI_1[wx.bkl] ###
+    COND_TOOLKIT_WASM_USE_GUI_1="#"
+    if test "x$TOOLKIT" = "xWASM" -a "x$USE_GUI" = "x1" ; then
+        COND_TOOLKIT_WASM_USE_GUI_1=""
+    fi
+    AC_SUBST(COND_TOOLKIT_WASM_USE_GUI_1)
+dnl ### begin block 20_COND_TOOLKIT_WASM_USE_GUI_1_WXUNIV_0[wx.bkl] ###
+    COND_TOOLKIT_WASM_USE_GUI_1_WXUNIV_0="#"
+    if test "x$TOOLKIT" = "xWASM" -a "x$USE_GUI" = "x1" -a "x$WXUNIV" = "x0" ; then
+        COND_TOOLKIT_WASM_USE_GUI_1_WXUNIV_0=""
+    fi
+    AC_SUBST(COND_TOOLKIT_WASM_USE_GUI_1_WXUNIV_0)
 dnl ### begin block 20_COND_TOOLKIT_X11[wx.bkl] ###
     COND_TOOLKIT_X11="#"
     if test "x$TOOLKIT" = "xX11" ; then

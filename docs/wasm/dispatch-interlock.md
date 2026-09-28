@@ -1,5 +1,4 @@
 # WASM dispatch interlock — no event dispatch while another chain is suspended mid-handler
-<!-- KICLOUD: adapted from pcbjam@8bad5f58e9:docs/wasm/dispatch-interlock.md (W3.0P, moved from docs/wasm/dispatch-interlock.md; kicloud/docs/provenance.md) -->
 
 This documents the interlock added in `include/wx/wasm/private/dispatch.h` and
 the six `src/wasm/` files that use it. It is the wxWidgets-side fix for a class

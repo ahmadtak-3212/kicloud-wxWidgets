@@ -24,7 +24,6 @@
 
 #include "wx/vlbox.h"
 
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/vlbox.cpp (W3.0P): white background and the wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
 #ifdef __EMSCRIPTEN__
     #include "wx/wasm/elementtracker.h"
 #endif
@@ -39,7 +38,6 @@
 #include "wx/selstore.h"
 #include "wx/renderer.h"
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #if wxUSE_ODCOMBOBOX
 #include "wx/odcombo.h"
 #endif
@@ -95,7 +93,6 @@ bool wxVListBox::Create(wxWindow *parent,
 
     // make sure the native widget has the right colour since we do
     // transparent drawing by default
-    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
     //SetBackgroundColour(GetBackgroundColour());
     SetBackgroundColour(*wxWHITE);
 
@@ -459,7 +456,6 @@ void wxVListBox::OnPaint(wxPaintEvent& WXUNUSED(event))
     // the update rectangle
     wxRect rectUpdate = GetUpdateClientRect();
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #ifdef __EMSCRIPTEN__
     // Clear previous element registrations for this window
     WasmUnregisterRenderedElementsByParent(this);
@@ -494,7 +490,6 @@ void wxVListBox::OnPaint(wxPaintEvent& WXUNUSED(event))
 
             rect.Deflate(m_ptMargins.x, m_ptMargins.y);
             OnDrawItem(dc, rect, line);
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 
 #ifdef __EMSCRIPTEN__
             // Register vlistbox item for element tracking (used by combo dropdowns)

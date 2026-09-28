@@ -260,7 +260,6 @@ wxRendererGeneric* wxRendererGeneric::sm_rendererGeneric = NULL;
 
 wxRendererGeneric::wxRendererGeneric()
     : m_penBlack(wxSystemSettings::GetColour(wxSYS_COLOUR_3DDKSHADOW)),
-      // KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/renderg.cpp (W3.0P): flatter generic header buttons and highlight-coloured selection rectangles on the DOM port
       m_penDarkGrey(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT)),
       m_penLightGrey(wxSystemSettings::GetColour(wxSYS_COLOUR_3DFACE)),
       m_penHighlight(wxSystemSettings::GetColour(wxSYS_COLOUR_3DHIGHLIGHT))
@@ -316,12 +315,10 @@ wxRendererGeneric::DrawHeaderButton(wxWindow* win,
 
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
 
-    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
     dc.SetPen(m_penDarkGrey);
     dc.DrawLine( x+w-1, y, x+w-1, y+h );  // right (outer)
     dc.DrawLine( x, y+h-1, x+w, y+h-1 );  // bottom (outer)
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 /*
     dc.SetPen(m_penDarkGrey);
     dc.DrawLine( x+w-2, y+1, x+w-2, y+h-1 );  // right (inner)
@@ -819,7 +816,6 @@ wxRendererGeneric::DrawItemSelectionRect(wxWindow * WXUNUSED(win),
         }
         else // !focused
         {
-            // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
             brush = wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT));
         }
     }
@@ -831,7 +827,6 @@ wxRendererGeneric::DrawItemSelectionRect(wxWindow * WXUNUSED(win),
     wxDCBrushChanger setBrush(dc, brush);
     bool drawFocusRect = (flags & wxCONTROL_CURRENT) && (flags & wxCONTROL_FOCUSED);
 
-    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
     //bool blackPen = drawFocusRect && !(flags & wxCONTROL_CELL);
     wxDCPenChanger setPen(dc, *wxTRANSPARENT_PEN);
 

@@ -15,7 +15,6 @@
 
 #include "wx/srchctrl.h"
 
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/srchctlg.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
 #ifdef __EMSCRIPTEN__
     #include "wx/wasm/elementtracker.h"
 #endif
@@ -543,7 +542,6 @@ void wxSearchCtrl::LayoutControls()
         m_cancelButton->SetSize(x, (height - sizeCancel.y) / 2,
                                 sizeCancel.x, sizeCancel.y);
     }
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 
 #ifdef __EMSCRIPTEN__
     // Register search control for element tracking

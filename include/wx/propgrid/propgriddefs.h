@@ -117,7 +117,6 @@ class WXDLLIMPEXP_FWD_CORE wxFont;
     #define wxPG_NAT_BUTTON_BORDER_ANY      0
     #define wxPG_NAT_BUTTON_BORDER_X        0
     #define wxPG_NAT_BUTTON_BORDER_Y        0
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/propgrid/propgriddefs.h (W3.0P): wxWASM property grid metrics (generic ones, with wxRendererNative for checkboxes) */
 
     // If 1 then controls are refreshed after selected was drawn.
     #define wxPG_REFRESH_CONTROLS 0
@@ -586,7 +585,7 @@ expdecl const classname& classname##RefFromVariant( const wxVariant& variant ) \
 #define WX_PG_IMPLEMENT_VARIANT_DATA_GETTER(classname, expdecl) \
 expdecl classname& operator << ( classname &value, const wxVariant &variant )\
 {\
-    wxASSERT( variant.GetType() == wxS(#classname) );\
+    wxASSERT( variant.GetType() == #classname );\
     \
     classname##VariantData *data = (classname##VariantData*) variant.GetData();\
     value = data->GetValue();\

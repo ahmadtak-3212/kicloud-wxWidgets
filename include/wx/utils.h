@@ -164,7 +164,6 @@ WXDLLIMPEXP_BASE wxString wxGetNativeCpuArchitectureName();
 WXDLLIMPEXP_BASE wxLinuxDistributionInfo wxGetLinuxDistributionInfo();
 #endif
 
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/utils.h (W3.0P): wxGetBrowserInfo() for the wasm port (src/wasm/utils.cpp) */
 #ifdef __WXWASM__
 WXDLLIMPEXP_BASE wxBrowserInfo wxGetBrowserInfo();
 #endif

@@ -63,7 +63,6 @@ protected:
 #define USE_NATIVE_FONT_DIALOG_FOR_MACOSX 0
 #endif
 
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/fontdlg.h (W3.0P): wxWASM uses the generic wxFontDialog */
 #if defined(__WXUNIVERSAL__) || \
     defined(__WXMOTIF__)     || \
     defined(__WXGPE__)       || \

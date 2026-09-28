@@ -87,7 +87,6 @@
     #include "wx/qt/dcmemory.h"
     #include "wx/qt/dcscreen.h"
 #endif
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/dcbase.cpp (W3.0P): wxWASM DC implementation headers for the DC factory
 
 #ifdef __WXWASM__
     #include "wx/wasm/dcclient.h"
@@ -1209,8 +1208,8 @@ void wxDC::DrawLabel(const wxString& text,
     wxCoord width, height;
     if ( bitmap.IsOk() )
     {
-        width = widthText + wxRound(bitmap.GetLogicalWidth());
-        height = wxRound(bitmap.GetLogicalHeight());
+        width = widthText + bitmap.GetWidth();
+        height = bitmap.GetHeight();
     }
     else // no bitmap
     {
@@ -1253,7 +1252,7 @@ void wxDC::DrawLabel(const wxString& text,
     {
         DrawBitmap(bitmap, x, y, true /* use mask */);
 
-        wxCoord offset = wxRound(bitmap.GetLogicalWidth()) + 4;
+        wxCoord offset = bitmap.GetWidth() + 4;
         x += offset;
         width -= offset;
 

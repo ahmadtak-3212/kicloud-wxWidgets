@@ -36,7 +36,6 @@
 #include "wx/vector.h"
 #include "wx/xlocale.h"
 
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/string.cpp (W3.0P): per-thread wxString iterator lists (see include/wx/string.h)
 #if wxUSE_UNICODE_UTF8
     // for the per-thread iterator node list (wxStringIteratorNode::GetFirst());
     // wx/string.h only pulls this in when the position cache is enabled
@@ -185,7 +184,6 @@ static wxStrCacheStatsDumper s_showCacheStats;
 
 #endif // wxUSE_STRING_POS_CACHE
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #if wxUSE_UNICODE_UTF8
 
 // The per-thread list of live iterator nodes (see the class comment in

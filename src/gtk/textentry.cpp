@@ -43,7 +43,6 @@ class wxTextCoalesceData
 public:
     wxTextCoalesceData(GtkWidget* widget, gulong handlerAfterKeyPress)
         : m_handlerAfterKeyPress(handlerAfterKeyPress)
-        , m_widget(widget)
     {
         m_inKeyPress = false;
         m_pendingTextChanged = false;
@@ -53,17 +52,12 @@ public:
         g_signal_handler_block(widget, m_handlerAfterKeyPress);
     }
 
-    ~wxTextCoalesceData()
-    {
-        g_signal_handler_disconnect(m_widget, m_handlerAfterKeyPress);
-    }
-
-    void StartHandlingKeyPress()
+    void StartHandlingKeyPress(GtkWidget* widget)
     {
         m_inKeyPress = true;
         m_pendingTextChanged = false;
 
-        g_signal_handler_unblock(m_widget, m_handlerAfterKeyPress);
+        g_signal_handler_unblock(widget, m_handlerAfterKeyPress);
     }
 
     bool SetPendingIfInKeyPress()
@@ -76,9 +70,9 @@ public:
         return true;
     }
 
-    bool EndHandlingKeyPressAndCheckIfPending()
+    bool EndHandlingKeyPressAndCheckIfPending(GtkWidget* widget)
     {
-        g_signal_handler_block(m_widget, m_handlerAfterKeyPress);
+        g_signal_handler_block(widget, m_handlerAfterKeyPress);
 
         wxASSERT( m_inKeyPress );
         m_inKeyPress = false;
@@ -95,7 +89,6 @@ private:
     bool m_inKeyPress;
     bool m_pendingTextChanged;
     const gulong m_handlerAfterKeyPress;
-    GtkWidget* const m_widget;
 
     wxDECLARE_NO_COPY_CLASS(wxTextCoalesceData);
 };
@@ -127,14 +120,14 @@ extern "C" {
 // to send a single wxEVT_TEXT even if we received several (typically two, when
 // the selected text in the control is replaced by new text) "changed" signals.
 static gboolean
-wx_gtk_text_after_key_press(GtkWidget*,
+wx_gtk_text_after_key_press(GtkWidget* widget,
                             GdkEventKey* WXUNUSED(gdk_event),
                             wxTextEntry* entry)
 {
     wxTextCoalesceData* const data = entry->GTKGetCoalesceData();
     wxCHECK_MSG( data, FALSE, "must be non-null if this handler is called" );
 
-    if ( data->EndHandlingKeyPressAndCheckIfPending() )
+    if ( data->EndHandlingKeyPressAndCheckIfPending(widget) )
     {
         entry->GTKOnTextChanged();
     }
@@ -988,7 +981,7 @@ void wxTextEntry::GTKEntryOnKeypress(GtkWidget* widget) const
         m_coalesceData = new wxTextCoalesceData(widget, handler);
     }
 
-    m_coalesceData->StartHandlingKeyPress();
+    m_coalesceData->StartHandlingKeyPress(widget);
 }
 
 int wxTextEntry::GTKEntryIMFilterKeypress(GdkEventKey* event) const

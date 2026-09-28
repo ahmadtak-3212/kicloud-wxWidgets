@@ -29,7 +29,6 @@
     #include "wx/palette.h"
 #endif // wxUSE_PALETTE
 
-#include <limits.h>     // for INT_MAX
 #include <stdlib.h>
 #include <string.h>
 
@@ -149,9 +148,6 @@ bool wxIFFDecoder::ConvertToImage(wxImage *image) const
     // set transparent colour mask
     if (transparent != -1)
     {
-        if (transparent < 0 || transparent >= colors)
-            return false;
-
         for (i = 0; i < colors; i++)
         {
             if ((pal[3 * i + 0] == 255) &&
@@ -276,7 +272,7 @@ static void decomprle(const byte *sptr, byte *dptr, long slen, long dlen)
 
     else if (codeByte > 0x80) {
         codeByte = 0x81 - (codeByte & 0x7f);
-        if ((slen > (long) 1) && (dlen >= (long) codeByte)) {
+        if ((slen > (long) 0) && (dlen >= (long) codeByte)) {
         dataByte = *sptr++;
         slen -= 2;
         dlen -= codeByte;
@@ -405,23 +401,6 @@ int wxIFFDecoder::ReadIFF()
         // bmhd_masking  = *(dataptr + 8 + 9); -- unused currently
         bmhd_compression = *(dataptr + 8 + 10);     // get compression
         bmhd_transcol    = iff_getword(dataptr + 8 + 12);
-
-        // Reject malformed BMHD chunks: zero width/height or bitplanes
-        // would later cause a divide-by-zero when computing the lineskip
-        // and row count for the BODY chunk; oversized dimensions would
-        // overflow the signed-int product used to size the pixel buffer
-        // (new byte[bmhd_width * bmhd_height * 3] below), leaving an
-        // undersized allocation behind for the BODY decode loop to
-        // overrun. Cap bmhd_width * bmhd_height so that the same product
-        // multiplied by 3 stays within INT_MAX.
-        if (bmhd_width <= 0 || bmhd_height <= 0
-                || bmhd_bitplanes <= 0 || bmhd_bitplanes > 32
-                || static_cast<wxUint64>(bmhd_width)
-                    * static_cast<wxUint64>(bmhd_height)
-                        > static_cast<wxUint64>(INT_MAX) / 3) {
-            break;
-        }
-
         BMHDok = true;                              // got BMHD
         dataptr += 8 + chunkLen;                    // to next chunk
     }
@@ -468,11 +447,7 @@ int wxIFFDecoder::ReadIFF()
         const byte *bodyptr = dataptr + 8;          // -> BODY data
 
         if (truncated) {
-        // Clamp the declared chunk length to the number of bytes actually
-        // present after the BODY chunk header; otherwise the subsequent
-        // decompression/decode loops would read up to 8 bytes (the size of
-        // the chunk header) past the end of databuf.
-        chunkLen = dataend - bodyptr;
+        chunkLen = dataend - dataptr;
         }
 
         //

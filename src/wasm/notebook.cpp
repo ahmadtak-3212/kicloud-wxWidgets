@@ -3,7 +3,6 @@
 // Purpose:     wxNotebook implementation for the WASM DOM port
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/notebook.cpp (W3.0P; kicloud/docs/provenance.md)
 
 // For compilers that support precompilation, includes "wx.h".
 #include "wx/wxprec.h"

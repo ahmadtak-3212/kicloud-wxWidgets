@@ -87,7 +87,6 @@ public:
     #include "wx/osx/dataform.h"
 #elif defined(__WXQT__)
     #include "wx/qt/dataform.h"
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/dataobj.h (W3.0P): wxWASM data format/object dispatch; UTF-8 text data objects (the browser clipboard exchanges UTF-8) */
 #elif defined(__WXWASM__)
     #include "wx/wasm/dataform.h"
 #endif
@@ -176,7 +175,6 @@ public:
     #include "wx/osx/dataobj.h"
 #elif defined(__WXQT__)
     #include "wx/qt/dataobj.h"
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #elif defined(__WXWASM__)
     #include "wx/wasm/dataobj.h"
 #endif
@@ -330,7 +328,6 @@ private:
 // ----------------------------------------------------------------------------
 
 #if wxUSE_UNICODE
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
     #if defined(__WXGTK20__) || defined(__WXX11__) || defined(__WXQT__) \
             || defined(__WXWASM__)
         // wasm: wxUSE_UNICODE_UTF8 build; src/wasm/clipbrd.cpp exchanges
@@ -597,7 +594,6 @@ private:
         #include "wx/osx/dataobj2.h"
     #elif defined(__WXQT__)
         #include "wx/qt/dataobj2.h"
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
     #elif defined(__WXWASM__)
         #include "wx/wasm/dataobj2.h"
     #endif

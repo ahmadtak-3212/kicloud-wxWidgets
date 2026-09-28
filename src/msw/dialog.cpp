@@ -24,6 +24,7 @@
 #include "wx/modalhook.h"
 
 #ifndef WX_PRECOMP
+    #include "wx/msw/wrapcdlg.h"
     #include "wx/utils.h"
     #include "wx/frame.h"
     #include "wx/app.h"

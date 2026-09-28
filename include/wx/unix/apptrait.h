@@ -66,12 +66,10 @@ public:
     virtual wxString GetDesktopEnvironment() const wxOVERRIDE;
 #endif // __WXGTK20____
 
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/unix/apptrait.h (W3.0P): wxWASM GUI traits: assert dialog and a browser-console log target */
 #if defined(__WXGTK20__) || defined(__WXWASM__)
     virtual bool ShowAssertDialog(const wxString& msg) wxOVERRIDE;
 #endif
 
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #if defined(__WXWASM__) && wxUSE_LOG
     // WASM-specific logger that outputs to browser console
     virtual wxLog *CreateLogTarget() wxOVERRIDE;

@@ -14,7 +14,7 @@ dnl ---------------------------------------------------------------------------
 dnl initialization
 dnl ---------------------------------------------------------------------------
 
-AC_INIT([wxWidgets], [3.2.11], [wx-dev@googlegroups.com])
+AC_INIT([wxWidgets], [3.2.6], [wx-dev@googlegroups.com])
 
 dnl the file passed to AC_CONFIG_SRCDIR should be specific to our package
 AC_CONFIG_SRCDIR([wx-config.in])
@@ -40,7 +40,7 @@ dnl wx_release_number += 1
 
 wx_major_version_number=3
 wx_minor_version_number=2
-wx_release_number=11
+wx_release_number=6
 wx_subrelease_number=0
 
 WX_RELEASE=$wx_major_version_number.$wx_minor_version_number
@@ -77,6 +77,7 @@ USE_WIN32=0
 USE_DOS=0
 USE_BEOS=0
 USE_MAC=0
+USE_WASM=0
 
 dnl Unix kind
 USE_AIX=
@@ -111,7 +112,7 @@ NEEDS_D_REENTRANT_FOR_R_FUNCS=0
 dnl the list of all available toolkits
 dnl
 dnl update NUM_TOOLKITS calculation below when adding a new toolkit here!
-ALL_TOOLKITS="GTK OSX_COCOA OSX_IPHONE MOTIF MSW X11 DFB QT"
+ALL_TOOLKITS="GTK OSX_COCOA OSX_IPHONE MOTIF MSW X11 DFB QT WASM"
 
 dnl NB: these wxUSE_XXX constants have value of 0 or 1 unlike all the other ones
 dnl     which are either yes or no
@@ -123,6 +124,7 @@ DEFAULT_wxUSE_MSW=0
 DEFAULT_wxUSE_X11=0
 DEFAULT_wxUSE_DFB=0
 DEFAULT_wxUSE_QT=0
+DEFAULT_wxUSE_WASM=0
 
 dnl these are the values which are really default for the given platform:
 dnl they're used if no --with-<toolkit> options were given to detect the
@@ -135,6 +137,7 @@ DEFAULT_DEFAULT_wxUSE_MSW=0
 DEFAULT_DEFAULT_wxUSE_X11=0
 DEFAULT_DEFAULT_wxUSE_DFB=0
 DEFAULT_DEFAULT_wxUSE_QT=0
+DEFAULT_DEFAULT_wxUSE_WASM=0
 
 PROGRAM_EXT=
 SAMPLES_CXXFLAGS=
@@ -304,6 +307,13 @@ case "${host}" in
     DEFAULT_DEFAULT_wxUSE_QT=1
   ;;
 
+  *-*-emscripten* )
+    USE_WASM=1
+    AC_DEFINE(__WASM__)
+    DEFAULT_DEFAULT_wxUSE_WASM=1
+    PROGRAM_EXT=".js"
+  ;;
+
   *)
     AC_MSG_WARN([*** System type ${host} is unknown, assuming generic Unix and continuing nevertheless.])
     AC_MSG_WARN([*** Please report the build results to wx-dev@googlegroups.com.])
@@ -443,6 +453,7 @@ WX_ARG_ONLY_WITH(msw,           [  --with-msw              use MS-Windows], [wxU
 WX_ARG_ONLY_WITH(directfb,      [  --with-directfb         use DirectFB], [wxUSE_DFB="$withval" wxUSE_UNIVERSAL="yes" CACHE_DFB=1 TOOLKIT_GIVEN=1])
 WX_ARG_ONLY_WITH(x11,           [  --with-x11              use X11], [wxUSE_X11="$withval" wxUSE_UNIVERSAL="yes" CACHE_X11=1 TOOLKIT_GIVEN=1])
 WX_ARG_ONLY_WITH(qt,            [  --with-qt               use Qt], [wxUSE_QT="$withval" CACHE_QT=1 TOOLKIT_GIVEN=1])
+WX_ARG_ONLY_WITH(wasm,          [  --with-wasm             use WebAssembly], [wxUSE_WASM="$withval" CACHE_WASM=1 TOOLKIT_GIVEN=1])
 WX_ARG_ENABLE(nanox,       [  --enable-nanox          use NanoX], wxUSE_NANOX)
 WX_ARG_ENABLE(gpe,         [  --enable-gpe            use GNOME PDA Environment features if possible], wxUSE_GPE)
 
@@ -498,7 +509,7 @@ if test "$wxUSE_GUI" = "yes"; then
     NUM_TOOLKITS=`expr ${wxUSE_GTK:-0} \
                   + ${wxUSE_OSX_COCOA:-0} + ${wxUSE_OSX_IPHONE:-0} + ${wxUSE_DFB:-0} \
                   + ${wxUSE_MOTIF:-0} + ${wxUSE_MSW:-0} \
-                  + ${wxUSE_X11:-0} + ${wxUSE_QT:-0}`
+                  + ${wxUSE_X11:-0} + ${wxUSE_QT:-0} + ${wxUSE_WASM:-0}`
 
 
     case "$NUM_TOOLKITS" in
@@ -705,7 +716,6 @@ WX_ARG_DISABLE(compat30,     [  --disable-compat30      disable wxWidgets 3.0 co
 
 WX_ARG_DISABLE(rpath,        [  --disable-rpath         disable use of rpath for uninstalled builds], wxUSE_RPATH)
 
-WX_ARG_DISABLE(symver,       [  --disable-symver        disable use of ELF symbols versioning even if supported], wxUSE_ELF_SYMVER)
 WX_ARG_DISABLE(visibility,   [  --disable-visibility    disable use of ELF symbols visibility even if supported], wxUSE_VISIBILITY)
 WX_ARG_DISABLE(tls,          [  --disable-tls           disable use of compiler TLS support], wxUSE_COMPILER_TLS)
 
@@ -2974,12 +2984,8 @@ if test "$wxUSE_EXPAT" != "no"; then
         wxCFLAGS_C99=$ac_cv_prog_cc_c99
         AC_SUBST(wxCFLAGS_C99)
 
-        dnl Don't check for docbook: we don't need to generate the
-        dnl documentation and, worse, Expat configure can actually fail the
-        dnl build if docbook is found but docbook2man is not the expected
-        dnl variant.
-        AX_SUBDIRS_CONFIGURE([src/expat/expat],
-            [[--without-docbook]])
+        dnl Expat needs this:
+        AC_CONFIG_SUBDIRS([src/expat/expat])
     fi
 
     wxUSE_XML=yes
@@ -3743,6 +3749,13 @@ libraries returned by 'pkg-config gtk+-2.0 --libs' or 'gtk-config
             )
         fi
     fi
+
+    if test "$wxUSE_WASM" = 1; then
+        TOOLKIT=WASM
+        dnl Use built-in png/zlib via Emscripten ports
+        GUI_TK_LIBRARY="-sUSE_LIBPNG=1 -sUSE_ZLIB=1"
+    fi
+
     dnl the name of the directory where the files for this toolkit live
     TOOLKIT_DIR=`echo ${TOOLKIT} | tr '[[A-Z]]' '[[a-z]]'`
 
@@ -3871,7 +3884,7 @@ if test "$wxUSE_OPENGL" = "yes" -o "$wxUSE_OPENGL" = "auto"; then
     dnl look in glcanvas.h for the list of platforms supported by wxGlCanvas:
 
     if test "$wxUSE_OSX_COCOA" = 1; then
-        OPENGL_LIBS="-framework OpenGL"
+        OPENGL_LIBS="-framework OpenGL -framework AGL"
     elif test "$wxUSE_MSW" = 1; then
         OPENGL_LIBS="-lopengl32 -lglu32"
     elif test "$wxUSE_MOTIF" = 1 -o "$wxUSE_X11" = 1 -o "$wxUSE_GTK" = 1 -o "$wxUSE_QT" = 1; then
@@ -3919,7 +3932,7 @@ if test "$wxUSE_OPENGL" = "yes" -o "$wxUSE_OPENGL" = "auto"; then
 
                         if test "$WXGTK3" = 1; then
                             if test "$wxUSE_GLCANVAS_EGL" != "no"; then
-                                PKG_CHECK_MODULES(EGL, [egl >= 1.4],
+                                PKG_CHECK_MODULES(EGL, [egl >= 1.5],
                                     [
                                         OPENGL_LIBS="$OPENGL_LIBS $EGL_LIBS"
                                         AC_DEFINE(wxUSE_GLCANVAS_EGL)
@@ -3934,7 +3947,7 @@ if test "$wxUSE_OPENGL" = "yes" -o "$wxUSE_OPENGL" = "auto"; then
                                         )
                                     ],
                                     [
-                                        AC_MSG_NOTICE([EGL 1.4+ not available. Will use GLX.])
+                                        AC_MSG_NOTICE([EGL 1.5+ not available. Will use GLX.])
                                     ]
                                 )
                                 if test "$have_wayland" != 1; then
@@ -3972,6 +3985,13 @@ if test "$wxUSE_OPENGL" = "yes" -o "$wxUSE_OPENGL" = "auto"; then
                 USE_OPENGL=0
             fi
         fi
+    elif test "$USE_WASM" = 1; then
+        dnl WASM uses WebGL through Emscripten - no external libraries needed
+        AC_MSG_NOTICE([Using WebGL for OpenGL support on WASM])
+        OPENGL_LIBS=""
+        dnl WebGL doesn't support immediate mode GL (glBegin/glEnd/etc.), so we need
+        dnl to emulate these using vertex arrays
+        AC_DEFINE(wxUSE_OPENGL_EMULATION)
     else
         AC_MSG_WARN([wxGLCanvas not implemented for this port, library will be compiled without it.])
         wxUSE_OPENGL="no"
@@ -4004,84 +4024,8 @@ dnl --- the marker for quick search, leave it here: SHARED_LIB_SETUP ---
 
 if test "$wxUSE_SHARED" = "yes"; then
 
-    dnl use versioned symbols if available on the platform and not disabled
-    if test "$wxUSE_ELF_SYMVER" != "no"; then
-        WX_VERSIONED_SYMBOLS([\$(wx_top_builddir)/version-script])
-
-        if test "$wx_cv_version_script" = "yes"; then
-            dnl We want to use either __symver__ attribute (preferably, as it
-            dnl works with LTO) or .symver, but to avoid checking for both of
-            dnl them, use the header file which can check if the attribute is
-            dnl available. Just remember to pretend that we do have support
-            dnl for this before including it, as it relies on this symbol,
-            dnl which we'll define below only if things do indeed work.
-            saveCppflags="$CPPFLAGS"
-            CPPFLAGS="$saveCppflags -I${srcdir}/include -DwxHAVE_ELF_SYMVER"
-
-            saveLdflags="$LDFLAGS"
-            LDFLAGS="$saveLdflags -Wl,--version-script,conftest.sym"
-
-            AC_CACHE_CHECK([if using multiple ELF symbol versions is supported],
-                wx_cv_elf_symver_multiple,
-                [
-                    echo "lib_new {}; lib_old { *; };" >conftest.sym
-                    AC_LANG_PUSH(C++)
-                    AC_LINK_IFELSE([
-                        AC_LANG_SOURCE([
-                            #include "wx/private/elfversion.h"
-                            extern "C" {
-                            wxELF_SYMVER("_foo","_foo@lib_old")
-                            wxELF_SYMVER("_foo","_foo@@lib_new")
-                            void foo() {}
-                            }
-                            int main() { return 0; }
-                        ])],
-                        wx_cv_elf_symver_multiple=yes,
-                        wx_cv_elf_symver_multiple=no
-                    )
-                    AC_LANG_POP()
-                    rm -f conftest.sym
-                ]
-            )
-
-            if test "$wx_cv_elf_symver_multiple" = "yes"; then
-                wx_cv_elf_symver=yes
-            else
-                AC_CACHE_CHECK([if using ELF symbol versions is supported],
-                    wx_cv_elf_symver,
-                    [
-                        echo "lib_new {}; lib_old { *; };" >conftest.sym
-                        AC_LANG_PUSH(C++)
-                        AC_LINK_IFELSE([
-                            AC_LANG_SOURCE([
-                                #include "wx/private/elfversion.h"
-                                extern "C" {
-                                wxELF_SYMVER("_foo","_foo@@lib_new")
-                                void foo() {}
-                                }
-                                int main() { return 0; }
-                            ])],
-                            wx_cv_elf_symver=yes,
-                            wx_cv_elf_symver=no
-                        )
-                        AC_LANG_POP()
-                        rm -f conftest.sym
-                    ]
-                )
-            fi
-
-            if test "$wx_cv_elf_symver" = "yes"; then
-                AC_DEFINE(wxHAVE_ELF_SYMVER)
-            fi
-
-            if test "$wx_cv_elf_symver_multiple" = "yes"; then
-                AC_DEFINE(wxHAVE_ELF_SYMVER_MULTIPLE)
-            fi
-
-            LDFLAGS="$saveLdflags"
-            CPPFLAGS="$saveCppflags"
-        fi
-    fi
+    dnl use versioned symbols if available on the platform
+    WX_VERSIONED_SYMBOLS([\$(wx_top_builddir)/version-script])
 
     dnl test for GCC's visibility support (sets CFLAGS_VISIBILITY, which is
     dnl assigned to CFLAGS and CXXFLAGS below)
@@ -4140,35 +4084,27 @@ if test "$wxUSE_SHARED" = "yes"; then
         install_name_tool=`which ${HOST_PREFIX}install_name_tool`
         if test "$install_name_tool" -a -x "$install_name_tool"; then
             DYLIB_RPATH_POSTLINK="${HOST_PREFIX}install_name_tool -id \$@ \$@"
-            dnl Note that the script below doesn't use realpath because it's
-            dnl only available since macOS 13 and doesn't even use readlink -f
-            dnl because this is only available since macOS 12, while we still
-            dnl need to support 10.10.
             cat <<EOF >change-install-names
 #!/bin/sh
-set -e
-[[ -z "\${WXDEBUG_X}" ]] || set -x
-destdir=\$1
-libdir=\$2
-bindir=\$3
-build_libdir=\$4
-libnames=\$(cd \${build_libdir}; printf '%s\n' libwx*${WX_RELEASE}.dylib)
+libnames=\`cd lib ; ls -1 | grep '\.[[0-9]][[0-9]]*\.dylib\$'\`
 changes=''
-for libname in \${libnames} ; do
-    target=\$(readlink \${build_libdir}/\$(readlink \${build_libdir}/\${libname}))
-    changes="\${changes} -change \${build_libdir}/\${target} \${libdir}/\${target}"
+for dep in \${libnames} ; do
+    changes="\${changes} -change \${4}/\${dep} \${3}/\${dep}"
 done
-for libname in \${libnames} ; do
-    target=\$(readlink \${build_libdir}/\$(readlink \${build_libdir}/\${libname}))
-    ${HOST_PREFIX}install_name_tool \${changes} -id \${libdir}/\${libname} \${destdir}\${libdir}/\${target}
+for i in \${libnames} ; do
+    if test -L \${1}/\${i}; then
+        # skip symbolic links
+        continue
+    fi
+    ${HOST_PREFIX}install_name_tool \${changes} -id \${3}/\${i} \${1}/\${i}
 done
 
-if test -f \${destdir}\${bindir}/wxrc-${WX_RELEASE} ; then
-    ${HOST_PREFIX}install_name_tool \${changes} \${destdir}\${bindir}/wxrc-${WX_RELEASE}
+if test -f "\${2}/wxrc-${WX_RELEASE}" ; then
+    ${HOST_PREFIX}install_name_tool \${changes} \${2}/wxrc-${WX_RELEASE}
 fi
 EOF
             chmod +x change-install-names
-            DYLIB_RPATH_INSTALL="\$(wx_top_builddir)/change-install-names \"\${DESTDIR}\" \${libdir} \${bindir} \$(wx_top_builddir)/lib"
+            DYLIB_RPATH_INSTALL="\$(wx_top_builddir)/change-install-names \${DESTDIR}\${libdir} \${DESTDIR}\${bindir} \${libdir} \$(wx_top_builddir)/lib"
         fi
 
         dnl the HEADER_PAD_OPTION is required by some wx samples to avoid the error:
@@ -4222,11 +4158,7 @@ if test "$wxUSE_DEBUG_INFO" = "yes"; then
     DEBUG_INFO=1
 fi
 
-wxELF_VERSION_PREFIX=`echo WX${lib_unicode_suffix}${WX_LIB_FLAVOUR}_ | tr '[[a-z]]' '[[A-Z]]'`
-if test "$wxUSE_ELF_SYMVER" != "no"; then
-    AC_DEFINE_UNQUOTED(wxELF_VERSION_PREFIX, "$wxELF_VERSION_PREFIX")
-fi
-WX_VERSION_TAG="${wxELF_VERSION_PREFIX}${WX_RELEASE}"
+WX_VERSION_TAG=`echo WX${lib_unicode_suffix}${WX_LIB_FLAVOUR}_${WX_RELEASE} | tr '[[a-z]]' '[[A-Z]]'`
 
 TOOLCHAIN_NAME="${TOOLKIT_DIR}${TOOLKIT_VERSION}${WIDGET_SET}${lib_unicode_suffix}${WX_LIB_FLAVOUR}-${WX_RELEASE}${HOST_SUFFIX}"
 
@@ -5899,9 +5831,6 @@ if test "$USE_UNIX" = 1 ; then
         AC_TRY_LINK([
                 #include <sys/ioctl.h>
                 #include <sys/soundcard.h>
-                #ifdef HAVE_UNISTD_H
-                # include <unistd.h> /* needed for ioctl() on Solaris */
-                #endif
             ],
             [
                 ioctl(0, SNDCTL_DSP_SPEED, 0);
@@ -5913,9 +5842,6 @@ if test "$USE_UNIX" = 1 ; then
                 AC_TRY_LINK([
                         #include <sys/ioctl.h>
                         #include <sys/soundcard.h>
-                        #ifdef HAVE_UNISTD_H
-                        # include <unistd.h> /* needed for ioctl() on Solaris */
-                        #endif
                     ],
                     [
                         ioctl(0, SNDCTL_DSP_SPEED, 0);

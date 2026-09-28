@@ -70,7 +70,6 @@ protected:
     virtual bool InitFromMonoBitmap(const wxBitmap& bitmap) = 0;
 };
 
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/bitmap.h (W3.0P): wxWASM bitmap: wxBitmapBase is used and XPM is the default type, like wxQt */
 #if defined(__WXDFB__) || \
     defined(__WXMAC__) || \
     defined(__WXGTK__) || \
@@ -333,7 +332,6 @@ protected:
 #elif defined(__WXQT__)
     #define wxBITMAP_DEFAULT_TYPE    wxBITMAP_TYPE_XPM
     #include "wx/qt/bitmap.h"
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #elif defined(__WXWASM__)
     #define wxBITMAP_DEFAULT_TYPE    wxBITMAP_TYPE_XPM
     #include "wx/wasm/bitmap.h"

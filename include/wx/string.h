@@ -55,7 +55,6 @@
 // it would have to be re-tested and probably corrected
 // CS: under OSX release builds the string destructor/cache cleanup sometimes
 // crashes, disable until we find the true reason or a better workaround
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/string.h (W3.0P): thread safety under emscripten pthreads: no position cache under __EMSCRIPTEN__, per-thread iterator lists instead of a list inside each (possibly shared) string */
 // Under Emscripten with threads the cache is unsafe: entries are keyed by raw
 // wxString addresses and only invalidated by the thread that modifies or
 // destroys the string, so another thread's entry can outlive the string and
@@ -270,7 +269,6 @@ private:
 
 #if wxUSE_UNICODE_UTF8
 // see the comment near wxString::iterator for why we need this
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 // Every live wxString iterator is tracked through one of these nodes so that
 // an in-place edit which shifts the underlying UTF-8 bytes can fix up all
 // iterators still pointing into the string (see wxUniCharRef::operator=()).
@@ -296,7 +294,6 @@ public:
     ~wxStringIteratorNode()
         { clear(); }
 
-    /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
     // Head of the calling thread's list of live iterator nodes; nodes for
     // different strings share the list and are told apart by m_str.
     static wxStringIteratorNode *&GetFirst();
@@ -323,7 +320,7 @@ private:
 };
 #endif // wxUSE_UNICODE_UTF8
 
-class WXDLLIMPEXP_BASE wxWARN_UNUSED wxString
+class WXDLLIMPEXP_BASE wxString
 {
   // NB: special care was taken in arranging the member functions in such order
   //     that all inline functions can be effectively inlined, verify that all
@@ -1656,7 +1653,7 @@ public:
     // and not defining it in STL build also helps us to get more clear error
     // messages for the code which relies on implicit conversion to char* in
     // STL build
-#if !wxUSE_STD_STRING_CONV_IN_WXSTRING && !defined(wxNO_IMPLICIT_WXSTRING_CONV_TO_PTR)
+#if !wxUSE_STD_STRING_CONV_IN_WXSTRING
     operator const wchar_t*() const { return c_str(); }
 
 #if wxUSE_UNSAFE_WXSTRING_CONV && !defined(wxNO_UNSAFE_WXSTRING_CONV)
@@ -1667,7 +1664,7 @@ public:
     operator const void*() const { return c_str(); }
 #endif // wxUSE_UNSAFE_WXSTRING_CONV && !defined(wxNO_UNSAFE_WXSTRING_CONV)
 
-#endif // !wxUSE_STD_STRING_CONV_IN_WXSTRING && !defined(wxNO_IMPLICIT_WXSTRING_CONV_TO_PTR)
+#endif // !wxUSE_STD_STRING_CONV_IN_WXSTRING
 
     // identical to c_str(), for MFC compatibility
     const wxCStrData GetData() const { return c_str(); }
@@ -3821,7 +3818,6 @@ private:
 #endif // !wxUSE_UNICODE_WCHAR
 
 #if wxUSE_UNICODE_UTF8
-  /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
   // live iterators are tracked in per-thread lists of wxStringIteratorNode
   // (see that class) so that wxUniCharRef can fix them up after an in-place
   // edit shifts the underlying bytes
@@ -4533,7 +4529,6 @@ void wxStringIteratorNode::DoSet(const wxString *str,
     m_str = str;
     if ( str )
     {
-        /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
         wxStringIteratorNode *&first = GetFirst();
         m_next = first;
         first = this;
@@ -4553,7 +4548,6 @@ void wxStringIteratorNode::clear()
     if ( m_prev )
         m_prev->m_next = m_next;
     else if ( m_str ) // first in the list
-        /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
         GetFirst() = m_next;
 
     m_next = m_prev = NULL;

@@ -103,7 +103,7 @@
 
 #if wxUSE_LONGLONG_NATIVE
 
-class WXDLLIMPEXP_BASE wxWARN_UNUSED wxLongLongNative
+class WXDLLIMPEXP_BASE wxLongLongNative
 {
 public:
     // ctors
@@ -344,7 +344,7 @@ private:
 };
 
 
-class WXDLLIMPEXP_BASE wxWARN_UNUSED wxULongLongNative
+class WXDLLIMPEXP_BASE wxULongLongNative
 {
 public:
     // ctors
@@ -573,7 +573,7 @@ wxLongLongNative& wxLongLongNative::operator=(const wxULongLongNative &ll)
 
 #if wxUSE_LONGLONG_WX
 
-class WXDLLIMPEXP_BASE wxWARN_UNUSED wxLongLongWx
+class WXDLLIMPEXP_BASE wxLongLongWx
 {
 public:
     // ctors
@@ -815,7 +815,7 @@ private:
 };
 
 
-class WXDLLIMPEXP_BASE wxWARN_UNUSED wxULongLongWx
+class WXDLLIMPEXP_BASE wxULongLongWx
 {
 public:
     // ctors

@@ -5,7 +5,6 @@
 // Copyright:   (c) 2019 Adam Hilss
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/dcscreen.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef __WX_WASM_DCSCREEN_H__
 #define __WX_WASM_DCSCREEN_H__

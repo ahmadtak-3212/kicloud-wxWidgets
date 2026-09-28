@@ -16,9 +16,7 @@ on:
       - 'docs/**'
       - 'interface/**'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to generate docs for'
+
 
 permissions:
   contents: read
@@ -30,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v3
 
       - name: Install doxygen
         run: |
@@ -55,36 +53,15 @@ jobs:
           fi
 
       - name: Upload
+        if: github.ref == 'refs/heads/3.2'
         working-directory: docs/doxygen
         env:
           DOCS_WEBSITE_KEY: ${{secrets.DOCS_WEBSITE_KEY}}
           DOCS_WEBSITE_SSH_CONFIG: ${{secrets.DOCS_WEBSITE_SSH_CONFIG}}
         run: |
-          dst=${{ inputs.version }}
-          if [[ -z "$dst" ]]; then
-            ref="${{github.ref}}"
-            case "$ref" in
-              refs/heads/3.2)
-                dst=3.2
-                ;;
-
-              refs/tags/v*)
-                dst=${ref#refs/tags/v}
-                ;;
-
-              refs/pull/*/merge)
-                echo "Skipping docs upload for pull request"
-                exit 0
-                ;;
-
-              *)
-                echo "Skipping docs upload for $ref of unknown type"
-                exit 2
-            esac
-          fi
           mkdir "$HOME/.ssh"
           echo "$DOCS_WEBSITE_KEY" > "$HOME/.ssh/docs_website_key"
           chmod 600 "$HOME/.ssh/docs_website_key"
           echo "$DOCS_WEBSITE_SSH_CONFIG" > "$HOME/.ssh/config"
-          rsync --checksum --compress --delete --out-format='%n' --recursive out/html/ wxdocs:public_html/$dst/ \
+          rsync --checksum --compress --delete --out-format='%n' --recursive out/html/ wxdocs:public_html/3.2/ \
             2> >(grep -v "Warning: Permanently added" 1>&2)

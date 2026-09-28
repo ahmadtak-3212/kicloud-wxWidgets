@@ -243,12 +243,8 @@ wxBitmapRefData::wxBitmapRefData(const wxBitmapRefData& data)
             const int d = dib.GetDepth();
 
             wxDIB dibDst(w, h, d);
-            if ( dibDst.IsOk() )
-            {
-                memcpy(dibDst.GetData(), dib.GetData(), wxDIB::GetLineSize(w, d)*h);
-                InitFromDIB(dibDst);
-            }
-            //else: creating the DIB failed, we can't do anything about it here.
+            memcpy(dibDst.GetData(), dib.GetData(), wxDIB::GetLineSize(w, d)*h);
+            InitFromDIB(dibDst);
         }
         else
         {

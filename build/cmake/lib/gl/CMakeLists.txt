@@ -7,11 +7,6 @@
 # Licence:     wxWindows licence
 #############################################################################
 
-if(NOT wxUSE_OPENGL)
-    wx_append_install_headers(OPENGL_CMN_HDR)
-    return()
-endif()
-
 wx_append_sources(GL_FILES OPENGL_CMN)
 
 if(WXMSW)
@@ -24,11 +19,6 @@ elseif(WXOSX_IPHONE)
     wx_append_sources(GL_FILES OPENGL_OSX_IPHONE)
 elseif(WXQT)
     wx_append_sources(GL_FILES OPENGL_QT)
-elseif(WXX11)
-    wx_append_sources(GL_FILES OPENGL_X11)
-elseif(WXWASM)
-    # KICLOUD: W3.1 wxGLCanvas on WebGL 2 (kicloud/docs/patches.md).
-    wx_append_sources(GL_FILES OPENGL_WASM)
 endif()
 
 wx_add_library(wxgl ${GL_FILES})

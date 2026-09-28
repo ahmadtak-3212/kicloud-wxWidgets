@@ -164,6 +164,10 @@ public :
         }
         [menu setDelegate:controller];
         [m_osxMenu setImplementation:this];
+        // gc aware
+        if ( m_osxMenu )
+            CFRetain(m_osxMenu);
+        [m_osxMenu release];
     }
 
     virtual ~wxMenuCocoaImpl();
@@ -410,7 +414,9 @@ wxMenuCocoaImpl::~wxMenuCocoaImpl()
 {
     [m_osxMenu setDelegate:nil];
     [m_osxMenu setImplementation:nil];
-    [m_osxMenu release];
+    // gc aware
+    if ( m_osxMenu )
+        CFRelease(m_osxMenu);
 }
 
 wxMenuImpl* wxMenuImpl::Create( wxMenu* peer, const wxString& title )

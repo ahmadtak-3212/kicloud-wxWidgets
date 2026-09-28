@@ -5,7 +5,6 @@
 // Copyright:   (c) 2022 Adam Hilss
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/toplevel.cpp (W3.0P; kicloud/docs/provenance.md)
 
 #include "wx/wxprec.h"
 
@@ -102,35 +101,10 @@ void wxTopLevelWindowWasm::Init()
     m_isActive = false;
     m_minimizeButtonRect = wxRect(0, 0, MINIMIZE_BUTTON_SIZE, MINIMIZE_BUTTON_SIZE);
     m_isDragging = false;
-    // KICLOUD: W3.0P (E2.2): wx 3.2's wxTopLevelWindowBase leaves m_modified
-    // uninitialized (only wxOSX sets it); the port publishes it, so start clean.
-    wxTopLevelWindowBase::OSXSetModified(false);
-}
-
-// KICLOUD: W3.0P (TODO.md E2.2; see the note above RegisterEmscriptenCallbacks in
-// src/wasm/app.cpp): the set of modified top-level windows, published to JS for
-// the 'beforeunload' listener, which must answer without calling into wasm. Keyed
-// by the window's address (valid from construction to destruction).
-EM_JS(void, wxWasmPublishModified, (const void* window, int modified), {
-    if (!(globalThis.__wxModifiedWindows instanceof Set))
-        globalThis.__wxModifiedWindows = new Set();
-    if (modified)
-        globalThis.__wxModifiedWindows.add(window);
-    else
-        globalThis.__wxModifiedWindows.delete(window);
-});
-
-void wxTopLevelWindowWasm::OSXSetModified(bool modified)
-{
-    wxTopLevelWindowBase::OSXSetModified(modified);
-    wxWasmPublishModified(this, modified ? 1 : 0);
 }
 
 wxTopLevelWindowWasm::~wxTopLevelWindowWasm()
 {
-    // KICLOUD: W3.0P (E2.2): a destroyed window has no unsaved changes to protect.
-    wxWasmPublishModified(this, 0);
-
     // Notify the host page when the application's main window is destroyed
     // (File->Quit or last close). A vetoed close (e.g. a cancelled
     // unsaved-changes prompt) never reaches destruction, so this only fires
@@ -464,8 +438,6 @@ extern "C"
 // the frame's children (GL canvas, tool/status bars) reposition through the
 // normal size-event -> Layout path. Safe as a synchronous ccall (Move does not
 // suspend the stack).
-// KICLOUD: W3.0P: a promising JSPI export (its body can suspend); pcbjam listed it in
-// scripts/common/jspi-exports.txt. KICLOUD-JSPI-EXPORT: wx_window_move
 void EMSCRIPTEN_KEEPALIVE wx_window_move(int cssId, int x, int y)
 {
     wxTopLevelWindow* win = wxFindTopLevelByCSSId(cssId);
@@ -477,8 +449,6 @@ void EMSCRIPTEN_KEEPALIVE wx_window_move(int cssId, int x, int y)
 // OnCloseWindow). MUST be invoked as an ASYNC ccall: Close() runs the handler
 // synchronously and may show a modal, which suspends — a plain ccall cannot
 // suspend (SuspendError); wx_window_close is a promising export.
-// KICLOUD: W3.0P: a promising JSPI export (its body can suspend); pcbjam listed it in
-// scripts/common/jspi-exports.txt. KICLOUD-JSPI-EXPORT: wx_window_close
 void EMSCRIPTEN_KEEPALIVE wx_window_close(int cssId)
 {
     wxTopLevelWindow* win = wxFindTopLevelByCSSId(cssId);
@@ -493,8 +463,6 @@ void EMSCRIPTEN_KEEPALIVE wx_window_close(int cssId)
 // left/bottom edges + corners, so this takes a full rect (origin + size), unlike
 // the move-only wx_window_move. Safe as a synchronous ccall (SetSize does not
 // suspend the stack).
-// KICLOUD: W3.0P: a promising JSPI export (its body can suspend); pcbjam listed it in
-// scripts/common/jspi-exports.txt. KICLOUD-JSPI-EXPORT: wx_window_resize
 void EMSCRIPTEN_KEEPALIVE wx_window_resize(int cssId, int x, int y, int width, int height)
 {
     wxTopLevelWindow* win = wxFindTopLevelByCSSId(cssId);

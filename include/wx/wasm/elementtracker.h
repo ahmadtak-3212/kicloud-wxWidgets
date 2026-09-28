@@ -6,7 +6,6 @@
 //              (window.wxElementRegistry in wx.js) for the test harness.
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/elementtracker.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef _WX_WASM_ELEMENTTRACKER_H_
 #define _WX_WASM_ELEMENTTRACKER_H_

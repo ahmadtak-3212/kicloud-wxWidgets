@@ -7,14 +7,6 @@
 # Licence:     wxWindows licence
 #############################################################################
 
-if(wxUSE_LIBPNG STREQUAL "sys")
-    find_package(PNG)
-    if(NOT PNG_FOUND)
-        # If the sys library can not be found use builtin
-        wx_option_force_value(wxUSE_LIBPNG builtin)
-    endif()
-endif()
-
 if(wxUSE_LIBPNG STREQUAL "builtin")
     # TODO: implement building libpng via its CMake file, using
     # add_subdirectory or ExternalProject_Add
@@ -61,4 +53,6 @@ if(wxUSE_LIBPNG STREQUAL "builtin")
     target_link_libraries(wxpng PRIVATE ${ZLIB_LIBRARIES})
     set(PNG_LIBRARIES wxpng)
     set(PNG_INCLUDE_DIRS ${wxSOURCE_DIR}/src/png)
+elseif(wxUSE_LIBPNG)
+    find_package(PNG REQUIRED)
 endif()

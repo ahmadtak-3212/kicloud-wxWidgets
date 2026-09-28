@@ -5,7 +5,6 @@
 // Copyright:   (c) 2019 Adam Hilss
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/toplevel.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef _WX_WASM_TOPLEVEL_H_
 #define _WX_WASM_TOPLEVEL_H_
@@ -62,12 +61,6 @@ public:
 
     virtual void SetTitle(const wxString &title) wxOVERRIDE;
     virtual wxString GetTitle() const wxOVERRIDE { return m_title; }
-
-    // KICLOUD: W3.0P (TODO.md E2.2): wx's portable "this window has unsaved
-    // changes" flag (a dot in the close button on macOS) is also published to JS
-    // (globalThis.__wxModifiedWindows), from which the page's 'beforeunload'
-    // listener decides synchronously whether the browser asks before leaving.
-    virtual void OSXSetModified(bool modified) wxOVERRIDE;
 
     virtual wxString GetCSSClassList() const wxOVERRIDE {
       return wxNonOwnedWindow::GetCSSClassList() + " toplevel";

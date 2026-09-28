@@ -6,7 +6,6 @@
 // Copyright:   (c) 2024
 // Licence:     wxWindows licence
 ///////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/glcanvas.cpp (W3.0P; kicloud/docs/provenance.md)
 
 // ============================================================================
 // declarations

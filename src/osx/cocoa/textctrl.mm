@@ -52,20 +52,6 @@
 - (void)setSelectable:(BOOL)flag;
 @end
 
-
-static BOOL HandleClipboardEvent(NSView *view, wxEventType type)
-{
-    wxWidgetImpl *impl = wxWidgetImpl::FindFromWXWidget(view);
-    wxWindow* wxpeer = impl ? impl->GetWXPeer() : NULL;
-    if ( wxpeer )
-    {
-        wxClipboardTextEvent evt(type, wxpeer->GetId());
-        evt.SetEventObject(wxpeer);
-        return wxpeer->HandleWindowEvent(evt);
-    }
-    return false;
-}
-
 // An object of this class is created before the text is modified
 // programmatically and destroyed as soon as this is done. It does several
 // things, like ensuring that the control is editable to allow setting its text
@@ -451,23 +437,6 @@ NSView* wxMacEditHelper::ms_viewCurrentlyEdited = nil;
     textField = field;
 }
 
-- (void)copy:(id)sender
-{
-    if ( !HandleClipboardEvent(textField, wxEVT_TEXT_COPY) )
-        [super copy:sender];
-}
-
-- (void)cut:(id)sender
-{
-    if ( !HandleClipboardEvent(textField, wxEVT_TEXT_CUT) )
-        [super cut:sender];
-}
-
-- (void)paste:(id)sender
-{
-    if ( !HandleClipboardEvent(textField, wxEVT_TEXT_PASTE) )
-        [super paste:sender];
-}
 
 @end
 
@@ -491,12 +460,6 @@ NSView* wxMacEditHelper::ms_viewCurrentlyEdited = nil;
         self.undoManager = [[[NSUndoManager alloc] init] autorelease];
     }
     return self;
-}
-
-- (void)dealloc
-{
-    self.undoManager = nil;
-    [super dealloc];
 }
 
 - (void)textDidChange:(NSNotification *)aNotification
@@ -576,21 +539,34 @@ NSView* wxMacEditHelper::ms_viewCurrentlyEdited = nil;
     return NO;
 }
 
+- (BOOL)_handleClipboardEvent:(wxEventType)type
+{
+    wxWidgetImpl *impl = wxWidgetImpl::FindFromWXWidget(self);
+    wxWindow* wxpeer = impl ? impl->GetWXPeer() : NULL;
+    if ( wxpeer )
+    {
+        wxClipboardTextEvent evt(type, wxpeer->GetId());
+        evt.SetEventObject(wxpeer);
+        return wxpeer->HandleWindowEvent(evt);
+    }
+    return false;
+}
+
 - (void)copy:(id)sender
 {
-    if ( !HandleClipboardEvent(self, wxEVT_TEXT_COPY) )
+    if ( ![self _handleClipboardEvent:wxEVT_TEXT_COPY] )
         [super copy:sender];
 }
 
 - (void)cut:(id)sender
 {
-    if ( !HandleClipboardEvent(self, wxEVT_TEXT_CUT) )
+    if ( ![self _handleClipboardEvent:wxEVT_TEXT_CUT] )
         [super cut:sender];
 }
 
 - (void)paste:(id)sender
 {
-    if ( !HandleClipboardEvent(self, wxEVT_TEXT_PASTE) )
+    if ( ![self _handleClipboardEvent:wxEVT_TEXT_PASTE] )
         [super paste:sender];
 }
 
@@ -1751,14 +1727,6 @@ wxSize wxNSTextFieldControl::GetBestSize() const
         [m_textField setFrame:former];
         sz.x = (int)ceil(best.size.width);
         sz.y = (int)ceil(best.size.height);
-
-        // never be smaller than single-line NSMiniControlSize field:
-        sz.y = wxMax(sz.y, 16);
-
-        // !!! Any changes to these adjustments must be mirrored in wxTextCtrl::DoGetSizeFromTextSize() !!!
-
-        sz.x -= 4;
-        sz.y -= 2;
 
         if ( [m_textField isBezeled] || [m_textField isBordered] )
         {

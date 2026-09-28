@@ -218,7 +218,6 @@ public :
     bool          strikethrough;
     wxString      faceName;
     wxFontEncoding encoding;
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/fontutil.h (W3.0P): wxWASM keeps the CSS font string rendered from wxNativeFontInfo (cache) */
 
 #if defined(__WXWASM__)
     mutable bool m_isRendered;

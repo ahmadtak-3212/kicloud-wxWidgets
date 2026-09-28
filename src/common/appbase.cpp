@@ -264,20 +264,6 @@ void wxAppConsoleBase::CleanUp()
     wxDELETE(m_mainLoop);
 }
 
-// The error code to return if OnInit() fails: this is a wxApp member variable
-// in 3.3, but this would break ABI in 3.2, so use a global for it instead.
-static int gs_errorExitCode = -1;
-
-void wxAppConsoleBase::SetErrorExitCode(int code)
-{
-    gs_errorExitCode = code;
-}
-
-int wxAppConsoleBase::GetErrorExitCode() const
-{
-    return gs_errorExitCode;
-}
-
 // ----------------------------------------------------------------------------
 // OnXXX() callbacks
 // ----------------------------------------------------------------------------
@@ -446,10 +432,7 @@ bool wxAppConsoleBase::ProcessIdle()
     // synthesize an idle event and check if more of them are needed
     wxIdleEvent event;
     event.SetEventObject(this);
-
-    // Don't let exceptions propagate from the user-defined handler, we may be
-    // called from an extern "C" callback (e.g. this is the case in wxGTK).
-    SafelyProcessEvent(event);
+    ProcessEvent(event);
 
 #if wxUSE_LOG
     // flush the logged messages if any (do this after processing the events
@@ -1163,7 +1146,6 @@ void wxTrap()
     DebugBreak();
 #elif defined(_MSL_USING_MW_C_HEADERS) && _MSL_USING_MW_C_HEADERS
     Debugger();
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/appbase.cpp (W3.0P): wxTrap() cannot raise SIGTRAP in a browser; the assertion is already logged
 #elif defined(__EMSCRIPTEN__)
     // In WASM, we can't break into a debugger and raise(SIGTRAP) crashes.
     // The assertion message has already been logged, so just continue.

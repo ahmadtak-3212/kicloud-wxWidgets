@@ -41,7 +41,6 @@
 #include "wx/thread.h"
 #include "wx/evtloop.h"
 #include "wx/link.h"
-#include "wx/vector.h"
 
 #include "wx/private/fd.h"
 #include "wx/private/socket.h"
@@ -1158,7 +1157,7 @@ wxSocketBase& wxSocketBase::Peek(void* buffer, wxUint32 nbytes)
     void* readbuf;
     wxUint32 readbytes;
     const wxUint32 DGRAM_MIN_READ = 65536;  // 64K is enough for UDP
-    wxVector<unsigned char> peekbuf;
+    std::vector<unsigned char> peekbuf;
     bool usePeekbuf = !m_impl->m_stream && nbytes < DGRAM_MIN_READ;
     if ( usePeekbuf )
     {
@@ -1705,18 +1704,12 @@ void wxSocketBase::SetTimeout(long seconds)
 
 void wxSocketBase::SetFlags(wxSocketFlags flags)
 {
-    // Do some sanity checking on the flags used: we can't not wait at all and
-    // wait for all data in the same direction (but using wxSOCKET_NOWAIT_READ
-    // with wxSOCKET_WAITALL_WRITE, or vice versa, is fine).
-    wxASSERT_MSG( (!(flags & wxSOCKET_NOWAIT_READ) ||
-                   !(flags & wxSOCKET_WAITALL_READ)) &&
-                  (!(flags & wxSOCKET_NOWAIT_WRITE) ||
-                   !(flags & wxSOCKET_WAITALL_WRITE)),
-                  "wxSOCKET_WAITALL and wxSOCKET_NOWAIT are incompatible" );
-
-    // And blocking is not compatible with not waiting, in any direction.
-    wxASSERT_MSG( !(flags & wxSOCKET_BLOCK) || !(flags & wxSOCKET_NOWAIT),
-                  "wxSOCKET_BLOCK and wxSOCKET_NOWAIT are incompatible" );
+    // Do some sanity checking on the flags used: not all values can be used
+    // together.
+    wxASSERT_MSG( !(flags & wxSOCKET_NOWAIT) ||
+                  !(flags & (wxSOCKET_WAITALL | wxSOCKET_BLOCK)),
+                  "Using wxSOCKET_WAITALL or wxSOCKET_BLOCK with "
+                  "wxSOCKET_NOWAIT doesn't make sense" );
 
     // Blocking sockets are very different from non-blocking ones and we need
     // to [un]register the socket with the event loop if wxSOCKET_BLOCK is

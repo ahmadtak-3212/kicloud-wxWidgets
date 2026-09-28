@@ -14,7 +14,7 @@
 #
 
 # Declare the minimum required CMake version
-cmake_minimum_required(VERSION 3.5...4.1)
+cmake_minimum_required(VERSION 2.8.12)
 
 if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     # If no deployment target has been set default to the minimum supported
@@ -32,10 +32,15 @@ project(minimal)
 # Request the required wxWidgets libs
 find_package(wxWidgets 3.2 COMPONENTS core base REQUIRED CONFIG)
 
+# Include the wxWidgets use file to initialize various settings
+if(wxWidgets_USE_FILE)
+    include(${wxWidgets_USE_FILE})
+endif()
+
 # Define a variable containing a list of source files for the project
 set(SRC_FILES
     minimal.cpp
-)
+    )
 
 if(WIN32)
     # Include a RC file for windows
@@ -47,20 +52,14 @@ endif()
 
 # Define the build target for the executable
 add_executable(${PROJECT_NAME} WIN32 MACOSX_BUNDLE ${SRC_FILES})
-# Link executable to the wxWidgets target
-target_link_libraries(${PROJECT_NAME} wxWidgets::wxWidgets)
+# Link required libraries to the executable
+target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES})
 
-if(MSVC)
-    # Use manifest from wx.rc
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        COMPILE_FLAGS "/DwxUSE_RC_MANIFEST"
-        LINK_FLAGS "/MANIFEST:NO"
-    )
-elseif(APPLE)
+if(APPLE)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         RESOURCE "../../src/osx/carbon/wxmac.icns"
         MACOSX_BUNDLE_ICON_FILE wxmac.icns
         MACOSX_BUNDLE_COPYRIGHT "Copyright wxWidgets"
         MACOSX_BUNDLE_GUI_IDENTIFIER "org.wxwidgets.minimal"
-    )
+        )
 endif()

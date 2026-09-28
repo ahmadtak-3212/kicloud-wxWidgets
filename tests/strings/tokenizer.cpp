@@ -275,15 +275,15 @@ void TokenizerTestCase::CopyObj()
     wxStringTokenizer tkzSrc(wxT("first:second:third:fourth"), wxT(":"));
     while ( tkzSrc.HasMoreTokens() )
     {
-        tkzSrc.GetNextToken();
+        wxString tokenSrc = tkzSrc.GetNextToken();
         wxStringTokenizer tkz = tkzSrc;
 
         CPPUNIT_ASSERT_EQUAL( tkzSrc.GetPosition(), tkz.GetPosition() );
         CPPUNIT_ASSERT_EQUAL( tkzSrc.GetString(), tkz.GetString() );
 
         // Change the state of both objects and compare again...
-        tkzSrc.GetNextToken();
-        tkz.GetNextToken();
+        tokenSrc = tkzSrc.GetNextToken();
+        wxString token = tkz.GetNextToken();
 
         CPPUNIT_ASSERT_EQUAL( tkzSrc.GetPosition(), tkz.GetPosition() );
         CPPUNIT_ASSERT_EQUAL( tkzSrc.GetString(), tkz.GetString() );
@@ -297,15 +297,15 @@ void TokenizerTestCase::AssignObj()
     wxStringTokenizer tkz;
     while ( tkzSrc.HasMoreTokens() )
     {
-        tkzSrc.GetNextToken();
+        wxString tokenSrc = tkzSrc.GetNextToken();
         tkz = tkzSrc;
 
         CPPUNIT_ASSERT_EQUAL( tkzSrc.GetPosition(), tkz.GetPosition() );
         CPPUNIT_ASSERT_EQUAL( tkzSrc.GetString(), tkz.GetString() );
 
         // Change the state of both objects and compare again...
-        tkzSrc.GetNextToken();
-        tkz.GetNextToken();
+        tokenSrc = tkzSrc.GetNextToken();
+        wxString token = tkz.GetNextToken();
 
         CPPUNIT_ASSERT_EQUAL( tkzSrc.GetPosition(), tkz.GetPosition() );
         CPPUNIT_ASSERT_EQUAL( tkzSrc.GetString(), tkz.GetString() );

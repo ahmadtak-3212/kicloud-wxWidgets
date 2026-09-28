@@ -59,12 +59,12 @@ jobs:
             runner: ubuntu-22.04
             cmake_generator: Unix Makefiles
             cmake_samples: ALL
-          - name: macOS 14 wxOSX
-            runner: macos-14
+          - name: macOS 12 wxOSX
+            runner: macos-12
             cmake_generator: Xcode
             cmake_defines: -DCMAKE_CXX_STANDARD=11
-          - name: macOS 14 wxIOS
-            runner: macos-14
+          - name: macOS 12 wxIOS
+            runner: macos-12
             cmake_generator: Xcode
             cmake_defines: -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_FIND_ROOT_PATH=/usr/local -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO
             cmake_samples: OFF
@@ -87,7 +87,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v3
         with:
           submodules: 'recursive'
 
@@ -118,11 +118,10 @@ jobs:
         run: |
           ./build/tools/before_install.sh
 
-      # required for CMake to find Ninja but shouldn't be used when using
-      # MSYS2, or we'd end up using MSVC clang instead of its own.
-      - name: Setup MSVC Environment
-        if: ${{ runner.os == 'Windows' && matrix.cmake_generator != 'MinGW Makefiles' }}
-        uses: step-security/gha-setup-vsdevenv@v6
+      # required for CMake to find Ninja
+      - name: "[Windows] Set up MSVC Developer Command Prompt"
+        if: runner.os == 'Windows'
+        uses: wxWidgets/gha-setup-vsdevenv@ac61ecb4b05909261f8f375601c0e15aabdd9f10
 
       - name: Configuring
         run: |
@@ -145,12 +144,10 @@ jobs:
                 cmake --build . --target install
             fi
 
-      - name: Setup Go
-        if: matrix.cmake_tests != 'OFF'
-        uses: actions/setup-go@v6
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
-          go-version: '1'
-          cache: false
+          python-version: '3.10'
 
       - name: Testing
         if: matrix.cmake_tests != 'OFF'

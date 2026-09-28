@@ -2021,7 +2021,7 @@ void wxCocoaDataViewControl::InitOutlineView(long style)
     NSTableHeaderView* header = nil;
     if ( !(style & wxDV_NO_HEADER) )
     {
-        header = [[[wxDVCNSHeaderView alloc] initWithDVC:GetDataViewCtrl()] autorelease];
+        header = [[wxDVCNSHeaderView alloc] initWithDVC:GetDataViewCtrl()];
     }
 
     [m_OutlineView setHeaderView:header];
@@ -2035,8 +2035,8 @@ wxCocoaDataViewControl::~wxCocoaDataViewControl()
 
 void wxCocoaDataViewControl::keyEvent(WX_NSEvent event, WXWidget slf, void *_cmd)
 {
-    NSString* c = [event type] == NSKeyDown ? [event charactersIgnoringModifiers] : nil;
-    if( c != nil && [c length] >= 1 && [c characterAtIndex: 0] == NSCarriageReturnCharacter )
+    if( [event type] == NSKeyDown && [[event charactersIgnoringModifiers]
+         characterAtIndex: 0] == NSCarriageReturnCharacter )
     {
         wxDataViewCtrl* const dvc = GetDataViewCtrl();
         const wxDataViewItem item = wxDataViewItem( [[m_OutlineView itemAtRow:[m_OutlineView selectedRow]] pointer]);

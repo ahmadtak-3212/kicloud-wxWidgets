@@ -4,7 +4,6 @@
 //              wx-dom.js into wxWindowWasm::OnDomEvent. DOM port only.
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/domevents.cpp (W3.0P; kicloud/docs/provenance.md)
 
 // For compilers that support precompilation, includes "wx.h".
 #include "wx/wxprec.h"
@@ -85,8 +84,6 @@ extern "C"
 // Called from wx-dom.js event listeners as an awaited call on a promising
 // export: each call is a fresh WASM entry that may itself suspend, so this
 // works even while a modal dialog keeps another chain suspended.
-// KICLOUD: W3.0P: a promising JSPI export (its body can suspend); pcbjam listed it in
-// scripts/common/jspi-exports.txt. KICLOUD-JSPI-EXPORT: wx_dom_event
 void EMSCRIPTEN_KEEPALIVE wx_dom_event(int domId, int kind)
 {
     wxDomWindowMap::iterator it = gs_domWindows.find(domId);
@@ -133,8 +130,6 @@ void EMSCRIPTEN_KEEPALIVE wx_dom_event(int domId, int kind)
 // button/buttons/detail: DOM MouseEvent semantics.
 // modifiers: 1 ctrl | 2 shift | 4 alt | 8 meta.
 // Returns 1 when wx consumed the event (JS uses it for preventDefault).
-// KICLOUD: W3.0P: a promising JSPI export (its body can suspend); pcbjam listed it in
-// scripts/common/jspi-exports.txt. KICLOUD-JSPI-EXPORT: wx_dom_mouse
 int EMSCRIPTEN_KEEPALIVE wx_dom_mouse(int kind, int x, int y,
                                       int button, int buttons, int detail,
                                       int modifiers, double deltaY)

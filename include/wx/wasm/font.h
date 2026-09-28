@@ -5,7 +5,6 @@
 // Copyright:   (c) 1998 Adam Hilss
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/font.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef _WX_WASM_FONT_H_
 #define _WX_WASM_FONT_H_

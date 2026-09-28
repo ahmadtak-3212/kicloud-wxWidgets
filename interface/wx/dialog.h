@@ -161,10 +161,7 @@ public:
         Constructor.
 
         @param parent
-            Can be @NULL, a frame or another dialog box. Please note that when
-            the parent is @NULL, the dialog will be owned by the application's
-            top window, if any. Use ::wxDIALOG_NO_PARENT style to really make
-            dialog not owned by any window.
+            Can be @NULL, a frame or another dialog box.
         @param id
             An identifier for the dialog. A value of -1 is taken to mean a
             default.

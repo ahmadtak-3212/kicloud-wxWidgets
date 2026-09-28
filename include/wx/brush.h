@@ -84,7 +84,6 @@ public:
     #include "wx/osx/brush.h"
 #elif defined(__WXQT__)
     #include "wx/qt/brush.h"
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/brush.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
 #elif defined(__WXWASM__)
     #include "wx/wasm/brush.h"
 #endif

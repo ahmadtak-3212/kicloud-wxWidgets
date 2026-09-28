@@ -337,10 +337,6 @@ void wxGenericFileDialog::OnOk( wxCommandEvent &WXUNUSED(event) )
 
     const wxString& path = selectedFiles[0];
 
-    // KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/filedlgg.cpp (W3.0P): OK on a directory navigates into it
-    // (PCBJam 651526b80e); the overwrite prompt below was commented out by PCBJam 4ab6d13cf0 (async popup
-    // work, no reason given: a nested modal inside the dialog's OK handler). Kept as imported; W3.13
-    // re-checks wxFD_OVERWRITE_PROMPT under JSPI (kicloud/progress/W3.0P.new-tasks.md).
     // If the user OKs a directory (via single-click + Enter/OK, or via a
     // double-click that routed through here instead of wxGenericFileCtrl's
     // OnActivated), navigate into the directory rather than closing the dialog
@@ -373,7 +369,6 @@ void wxGenericFileDialog::OnOk( wxCommandEvent &WXUNUSED(event) )
     if ( HasFdFlag(wxFD_SAVE) && HasFdFlag(wxFD_OVERWRITE_PROMPT) &&
                 wxFileExists(path) )
     {
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 /*
         if ( wxMessageBox
              (

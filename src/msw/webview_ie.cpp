@@ -955,6 +955,7 @@ void wxWebViewIE::ClearSelection()
     if(document)
     {
         wxCOMPtr<IHTMLSelectionObject> selection;
+        wxString selected;
         HRESULT hr = document->get_selection(&selection);
         if(SUCCEEDED(hr))
         {
@@ -1770,7 +1771,7 @@ HRESULT STDMETHODCALLTYPE VirtualProtocol::ParseUrl(
             case wxPARSE_SECURITY_URL:
             case wxPARSE_SECURITY_DOMAIN:
             {
-                if ( cchResult <= secLen )
+                if ( cchResult < secLen )
                     return S_FALSE;
                 wcscpy(pwzResult, m_handler->GetSecurityURL().wc_str());
                 *pcchResult = secLen;

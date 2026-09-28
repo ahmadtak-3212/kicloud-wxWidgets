@@ -195,22 +195,10 @@ bool wxStyledTextCtrl::Create(wxWindow *parent,
                               long style,
                               const wxString& name)
 {
-    style |= wxVSCROLL | wxHSCROLL | wxWANTS_CHARS | wxCLIP_CHILDREN;
-
-    // We want to use a specific class name for this window in wxMSW to make it
-    // possible to configure screen readers to handle it specifically.
-    bool created =
-#ifdef __WXMSW__
-        CreateUsingMSWClass(
-            wxApp::GetRegisteredClassName(wxT("Scintilla")),
-            parent, id, pos, size, style, name
-        );
-#else
-        wxControl::Create(
-            parent, id, pos, size, style, wxDefaultValidator, name
-        );
-#endif
-    if ( !created )
+    style |= wxVSCROLL | wxHSCROLL;
+    if (!wxControl::Create(parent, id, pos, size,
+                           style | wxWANTS_CHARS | wxCLIP_CHILDREN,
+                           wxDefaultValidator, name))
         return false;
 
 #ifdef LINK_LEXERS
@@ -5206,9 +5194,7 @@ void wxStyledTextCtrl::StartStyling(int start, int unused)
 // Event handlers
 
 void wxStyledTextCtrl::OnPaint(wxPaintEvent& WXUNUSED(evt)) {
-    // This _must_ be a wxMemoryDC because the code in SurfaceImpl (see
-    // PlatWX.cpp) unconditionally casts it to wxMemoryDC currently.
-    wxBufferedPaintDC dc(this);
+    wxPaintDC dc(this);
     m_swx->DoPaint(&dc, GetUpdateRegion().GetBox());
 }
 
@@ -5690,10 +5676,18 @@ WXLRESULT wxStyledTextCtrl::MSWWindowProc(WXUINT nMsg,
     WXWPARAM wParam,
     WXLPARAM lParam)
 {
-    if ( m_swx )
+    switch(nMsg) {
+    // Forward IME messages to ScintillaWX
+    case WM_IME_KEYDOWN:
+    case WM_IME_REQUEST:
+    case WM_IME_STARTCOMPOSITION:
+    case WM_IME_ENDCOMPOSITION:
+    case WM_IME_COMPOSITION:
+    case WM_IME_SETCONTEXT:
         return SendMsg(nMsg, wParam, lParam);
-    else
+    default:
         return wxControl::MSWWindowProc(nMsg, wParam, lParam);
+    }
 }
 #endif
 

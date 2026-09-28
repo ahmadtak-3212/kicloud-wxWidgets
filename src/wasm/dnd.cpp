@@ -5,7 +5,6 @@
 // Copyright:   (c) 2022 Adam Hilss
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/dnd.cpp (W3.0P; kicloud/docs/provenance.md)
 
 #include "wx/wxprec.h"
 
@@ -45,20 +44,6 @@ wxDropSource::wxDropSource(wxWindow *WXUNUSED(win),
       m_overWindow(NULL),
       m_lastMouseEventValid(false)
 {
-}
-
-// KICLOUD: W3.0P: the data-object constructor of the other ports.
-wxDropSource::wxDropSource(wxDataObject& data,
-                           wxWindow *WXUNUSED(win),
-                           const wxCursor &copy,
-                           const wxCursor &move,
-                           const wxCursor &none)
-    : wxDropSourceBase(copy, move, none),
-      m_dropFlags(0),
-      m_overWindow(NULL),
-      m_lastMouseEventValid(false)
-{
-    SetData(data);
 }
 
 wxDropSource::~wxDropSource()

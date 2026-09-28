@@ -5,7 +5,6 @@
 // Copyright:   (c) 2019 Adam Hilss
 // Licence:     LGPL v2
 ///////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/dnd.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef _WX_WASM_DND_H_
 #define _WX_WASM_DND_H_
@@ -35,13 +34,6 @@ class WXDLLIMPEXP_CORE wxDropSource: public wxDropSourceBase
 {
 public:
     wxDropSource(wxWindow *win = NULL,
-                 const wxCursor &copy = wxNullCursor,
-                 const wxCursor &move = wxNullCursor,
-                 const wxCursor &none = wxNullCursor);
-    // KICLOUD: W3.0P: the data-object constructor every other port has
-    // (wxRichTextDropSource and wx's generic code use it).
-    wxDropSource(wxDataObject& data,
-                 wxWindow *win,
                  const wxCursor &copy = wxNullCursor,
                  const wxCursor &move = wxNullCursor,
                  const wxCursor &none = wxNullCursor);

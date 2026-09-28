@@ -337,7 +337,6 @@ private:
     #include "wx/motif/textentry.h"
 #elif defined(__WXQT__)
     #include "wx/qt/textentry.h"
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/textentry.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
 #elif defined(__WXWASM__)
     #include "wx/wasm/textentry.h"
 #else

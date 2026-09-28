@@ -7,14 +7,9 @@
 # Licence:     wxWindows licence
 #############################################################################
 
-if(NOT wxUSE_HTML)
-    wx_append_install_headers(HTML_CMN_HDR)
-    return()
-endif()
-
 wx_append_sources(HTML_FILES HTML_CMN)
 
-if(WXMSW OR wxUSE_LIBMSPACK)
+if(WIN32 OR wxUSE_LIBMSPACK)
     wx_append_sources(HTML_FILES HTML_MSW)
 endif()
 

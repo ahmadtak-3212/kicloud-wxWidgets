@@ -732,7 +732,6 @@ void wxNativeFontInfo::SetPointSize(int pointsize)
 
 #ifdef wxNO_NATIVE_FONTINFO
 
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/fontcmn.cpp (W3.0P): wxWASM implements wxNativeFontInfo string conversion/setters itself (CSS font strings)
 #if !defined(__WXWASM__)
 
 // These are the generic forms of FromString()/ToString.
@@ -825,7 +824,6 @@ wxString wxNativeFontInfo::ToString() const
     return s;
 }
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #endif // !defined(__WXWASM__)
 
 void wxNativeFontInfo::Init()
@@ -838,7 +836,6 @@ void wxNativeFontInfo::Init()
     strikethrough = false;
     faceName.clear();
     encoding = wxFONTENCODING_DEFAULT;
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #if defined(__WXWASM__)
     m_isRendered = false;
 #endif
@@ -884,7 +881,6 @@ wxFontEncoding wxNativeFontInfo::GetEncoding() const
     return encoding;
 }
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #if !defined(__WXWASM__)
 
 void wxNativeFontInfo::SetFractionalPointSize(double pointsize)
@@ -928,7 +924,6 @@ void wxNativeFontInfo::SetEncoding(wxFontEncoding encoding_)
     encoding = encoding_;
 }
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #endif // !defined(__WXWASM__)
 
 #endif // generic wxNativeFontInfo implementation

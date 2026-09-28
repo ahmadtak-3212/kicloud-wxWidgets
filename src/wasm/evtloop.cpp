@@ -5,7 +5,6 @@
 // Copyright:   (c) 2022 Adam Hilss
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/evtloop.cpp (W3.0P; kicloud/docs/provenance.md)
 
 #include "wx/wxprec.h"
 
@@ -19,10 +18,8 @@
 
 #include <emscripten.h>
 #include <stdio.h>   // printf: diagnostics land in the browser console
-#include <string.h>  // KICLOUD: W3.0P (E2.4): strcmp for wxWasmNestedWait's kinds
 
 #include <deque>
-#include <vector>    // KICLOUD: W3.0P (E2.4): the nested blocking calls (wxWasmNestedWait)
 
 // Run work on an activation that may suspend (defined below; declared here
 // for the entries near the top of this file). See its definition for why
@@ -195,8 +192,6 @@ extern "C" {
     // the context bare setTimeout timer callbacks always ran in — the mailbox
     // changes WHEN a message runs (queued, in order, interlock free), not the
     // kind of entry it runs on.
-    // KICLOUD: W3.0P: a promising JSPI export (its body can suspend); pcbjam listed it in
-    // scripts/common/jspi-exports.txt. KICLOUD-JSPI-EXPORT: wxWasmMailboxTick
     void EMSCRIPTEN_KEEPALIVE wxWasmMailboxTick()
     {
         // A delivered timer handler can suspend exactly like a DOM handler
@@ -314,8 +309,6 @@ extern "C" {
         wxWasmDispatchAbandon();
     }
 
-    // KICLOUD: W3.0P: a promising JSPI export (its body can suspend); pcbjam listed it in
-    // scripts/common/jspi-exports.txt. KICLOUD-JSPI-EXPORT: ProcessEvents
     void EMSCRIPTEN_KEEPALIVE ProcessEvents()
     {
         if (!wxTheApp)
@@ -351,130 +344,44 @@ extern "C" {
 //     ONE animation frame via wxWasmYieldToBrowser — a JSPI suspension the engine
 //     resumes on the next frame.
 //   * nested (DoRun depth >0): a registered "nested" scheduler wait (doc 17 S4) — no
-//     pump; the top-level tick keeps dispatching at any depth.
-// KICLOUD: W3.0P (kicloud/TODO.md E2.4/E2.8; W3.0P lens 2): the nested loop's wait is a
-// wxWasmNestedWait (wx/wasm/private/yieldwait.h), and so is a modal's: ScheduleExit() ends
-// the exiting loop's OWN wait (PCBJam resolved the innermost "nested" wait, whichever loop
-// was exiting, and DoRun returned 0), and a loop returns, with the code ScheduleExit() was
-// given, once every blocking call begun after it has returned. The top-level loop likewise
-// exits only once no nested blocking call is left.
+//     pump; the top-level tick keeps dispatching at any depth. ScheduleExit() resolves
+//     the innermost wait. The top-level loop instead just sets m_shouldExit.
 
 // Depth of nested wxGUIEventLoop::DoRun() calls. 0 = none running; 1 = the
 // top-level main loop; >1 = a nested (quasi-modal) loop.
 static int s_wxRunDepth = 0;
 
-// ----------------------------------------------------------------------------
-// wxWasmNestedWait: the nested blocking calls, innermost last
-// ----------------------------------------------------------------------------
-// KICLOUD: W3.0P (kicloud/TODO.md E2.4; W3.0P lens 2 of the K.11 retry). The contract is in
-// wx/wasm/private/yieldwait.h. The list holds pointers to the calls' own wxWasmNestedWait
-// objects, which live on the suspended stacks of the calls (each activation has its own
-// stack region, scheduler.js), so a call's End() from another activation reaches it.
-
 namespace
 {
 
-std::vector<wxWasmNestedWait *> &wxWasmNestedWaits()
+// The nested loop's suspension. The opener's chain suspends here for the
+// dialog's whole lifetime; the interlock is zeroed for that whole span so the
+// legitimate dispatcher keeps running meanwhile (manual save/restore:
+// wxWasmDispatchRestore centralizes the erased-guard reporting). The nested
+// loop is a registered WAIT, not a pump (doc 17 S4): the top-level tick is
+// the sole dispatcher at any depth, and ScheduleExit()/Exit() resolves the
+// innermost "nested" wait to resume this stack.
+void wxWasmNestedWaitBody(void *)
 {
-    static std::vector<wxWasmNestedWait *> s_waits;
-    return s_waits;
+    // Token 0 = the scheduler refused the wait (dead or terminal instance):
+    // never begin a park nothing can resolve — return without touching the
+    // dispatch interlock.
+    const int token = wxWasmBeginWait("nested");
+    if (token <= 0)
+        return;
+
+    const int savedDispatchDepth = wxWasmDispatchDepth;
+    wxWasmDispatchDepth = 0;
+    wxWasmYieldUntil(token);   // suspends until resolved
+    wxWasmDispatchRestore(savedDispatchDepth, "NestedLoop");
 }
 
 }  // namespace
 
-wxWasmNestedWait::wxWasmNestedWait(const char *kind)
-    : m_endedKind(strcmp(kind, "modal") == 0 ? "modal-ended" : "nested-ended"),
-      m_token(wxWasmBeginWait(kind)),
-      m_result(0),
-      m_listed(false),
-      m_ended(false),
-      m_endedByOwner(false)
-{
-    // Token 0 = the scheduler refused the wait (dead or terminal instance):
-    // never begin a park nothing can resolve (IsOk() is false).
-    if ( m_token > 0 )
-    {
-        wxWasmNestedWaits().push_back(this);
-        m_listed = true;
-    }
-}
-
-wxWasmNestedWait::~wxWasmNestedWait()
-{
-    // Wait() takes the call off the list when it returns; a call that never waited (or
-    // unwound) leaves it here.
-    if ( m_listed )
-        Unlist();
-}
-
-size_t wxWasmNestedWait::GetCount()
-{
-    return wxWasmNestedWaits().size();
-}
-
-void wxWasmNestedWait::Unlist()
-{
-    std::vector<wxWasmNestedWait *> &waits = wxWasmNestedWaits();
-    for ( size_t i = waits.size(); i-- > 0; )
-    {
-        if ( waits[i] == this )
-        {
-            waits.erase(waits.begin() + i);
-            break;
-        }
-    }
-    m_listed = false;
-
-    // The enclosing call is innermost now. If it was ended while this one ran, resume it
-    // so that it returns (wxGTK: the returning loop's gtk_main_quit() of the enclosing one).
-    // A wait of it that is resolved already (its resume is queued) makes this a no-op.
-    if ( !waits.empty() && waits.back()->m_ended )
-        wxWasmResolveWait(waits.back()->m_token, waits.back()->m_result);
-}
-
-int wxWasmNestedWait::Wait()
-{
-    if ( !m_listed )
-        return m_result;
-
-    for ( ;; )
-    {
-        const int result = wxWasmYieldUntil(m_token);   // suspends until resolved
-        if ( !m_ended )
-        {
-            // Resolved by someone other than End(): the shim's error containment
-            // (resolveTopWait after a handler threw). That ends the call, as before.
-            m_ended = true;
-            m_result = result;
-        }
-        if ( wxWasmNestedWaits().back() == this )
-            break;
-
-        // Ended while a call begun after this one still runs: park again until that one
-        // has returned (its Unlist() resolves the new wait). The "-ended" kind keeps this
-        // wait out of the containment's "nested"/"modal" stacks.
-        m_token = wxWasmBeginWait(m_endedKind);
-        if ( m_token <= 0 )
-            break;   // refused (dead or terminal instance): nothing could resume this call
-    }
-
-    Unlist();
-    return m_result;
-}
-
-void wxWasmNestedWait::End(int result)
-{
-    m_result = result;
-    m_endedByOwner = true;
-    if ( m_ended )
-        return;
-
-    m_ended = true;
-    // Resolve the call's own wait (E2.4). Resolved before its Wait() parks (EndModal inside
-    // Show), the wait returns at once; a call that is not innermost parks again (Wait()).
-    if ( m_listed )
-        wxWasmResolveWait(m_token, result);
-}
+EM_JS(void, wxWasmExitNestedLoop, (), {
+    // The nested loop is a registered wait (doc 17 S4).
+    globalThis.__wxScheduler.resolveTopWait('nested', 0);
+});
 
 // Top-level main loop: yield to the browser for ONE animation frame, then
 // return. Called in a plain C++ while-loop in DoRun (below), so each tick
@@ -540,8 +447,6 @@ extern "C" {
     // exists to keep moving. A throwing handler tears a nested loop down from
     // the error path in wxWasmScheduleProcessEvents, which releases the
     // suspended nested DoRun.
-    // KICLOUD: W3.0P: a promising JSPI export (its body can suspend); pcbjam listed it in
-    // scripts/common/jspi-exports.txt. KICLOUD-JSPI-EXPORT: wxWasmTopLevelTick
     void EMSCRIPTEN_KEEPALIVE wxWasmTopLevelTick()
     {
         // The tick itself is a promising export — dispatch directly; a
@@ -591,8 +496,6 @@ EM_JS(void, wxWasmArmJspiJobTickJs, (), {
     }, 0);
 });
 
-// KICLOUD: W3.0P: a promising JSPI export (its body can suspend); pcbjam listed it in
-// scripts/common/jspi-exports.txt. KICLOUD-JSPI-EXPORT: wxWasmJobTick
 extern "C" void EMSCRIPTEN_KEEPALIVE wxWasmJobTick()
 {
     // Deliver ONE job per tick: a job that suspends (a click opening a modal)
@@ -642,23 +545,19 @@ extern "C" void wxWasmRunOnDispatchContext(void (*fn)(void *), void *arg)
 // wxGUIEventLoop
 // ----------------------------------------------------------------------------
 
-void wxGUIEventLoop::ScheduleExit(int rc)
+void wxGUIEventLoop::ScheduleExit(int WXUNUSED(rc))
 {
     wxCHECK_RET( IsInsideRun(), wxT("can't call ScheduleExit() if not started") );
 
-    // KICLOUD: W3.0P (E2.4; W3.0P lens 2): keep the code for Run() (wxGTK's m_exitcode)
-    m_exitcode = rc;
     m_shouldExit = true;
 
-    // The top-level loop is a plain while-loop that checks m_shouldExit (DoRun). A nested
-    // (quasi-modal) loop blocks on its own wait.
-    // KICLOUD: W3.0P (E2.4, wx's ScheduleExit contract; W3.0P lens 2): end THIS loop's
-    // wait; PCBJam resolved the innermost "nested" wait whenever any loop but the top-level
-    // one was exiting, which ended an inner loop instead of an outer one, and the top-level
-    // loop's own ScheduleExit ended a nested loop. The loop returns once every blocking call
-    // begun after it has returned (wxWasmNestedWait::Wait).
-    if ( m_nestedWait )
-        m_nestedWait->End(rc);
+    // The top-level loop is a plain while-loop that checks m_shouldExit (above). A nested
+    // (quasi-modal) loop is a registered scheduler wait — resolve it so its DoRun resumes
+    // and returns.
+    if ( s_wxRunDepth > 1 )
+    {
+        wxWasmExitNestedLoop();
+    }
 }
 
 bool wxGUIEventLoop::Pending() const
@@ -707,48 +606,15 @@ void wxGUIEventLoop::DoYieldFor(long eventsToProcess)
     // that yield qualifies: a sleep in some other loop (progress reporter,
     // simulator wait, a startup library wait) must not leave a mark behind
     // for an unrelated timer-capable yield later at the same depth.
-    //
-    // KICLOUD: W3.0P (K.11 retry, round r2; kicloud/TODO.md E2.5/E2.6). Two notes for kicloud:
-    // the mark is set only by PCBJam's main-thread nanosleep shim (wxWasmNoteSleep()), which
-    // kicloud does not link yet (W3.0P inventory row E2; task W3.4a), so this delivery does not
-    // run at all today; and KiCad 10.0.6's progress loops DO sleep between yields
-    // (PROGRESS_REPORTER_BASE::KeepRefreshing(true): wxMilliSleep(33) between updateUI() calls
-    // that end in DrainPendingEvents() = YieldFor(wxEVT_CATEGORY_TIMER)); PCBJam's KiCad fork
-    // skips those updates on wasm. W3.4a decides the rule with the shim.
     const bool sleptJustBefore = wxWasmMailboxSleptDepth == wxWasmDispatchDepth;
     wxWasmMailboxSleptDepth = -1;
 
     if (sleptJustBefore && (eventsToProcess & wxEVT_CATEGORY_TIMER))
         wxWasmMailboxDeliverNested();
 
-    // KICLOUD: W3.0P (kicloud/TODO.md E2.5 and wx's YieldFor() contract, interface/wx/evtloop.h:
-    // events outside the mask are "delayed (i.e. processed by the main loop later)"; W3.0P
-    // lens 2 of the K.11 retry, round r1 review). PCBJam looped `while (Pending()) Dispatch();`.
-    // Pending() is HasPendingEvents(), which stays true while an event outside the mask waits
-    // (wxEvtHandler::ProcessPendingEvents() delays it and wxAppConsoleBase puts it back on the
-    // pending list), so a selective yield never returned: KiCad's DrainPendingEvents()
-    // (YieldFor(wxEVT_CATEGORY_TIMER) on every progress update) with a CallAfter pending froze
-    // the page. Every pass also repainted, and every third one sent idle events, which wx never
-    // does inside a selective yield. Like wxGTK and wxMSW, do the port's own work for the asked
-    // categories once and leave wxEVT_CATEGORY_ALL's extra work to the base class:
-    //  - the wx pending events, including the input the port queues while a chain is parked
-    //    (wxApp::HandleMouseEvent/HandleKeyEvent, wxEVT_CATEGORY_USER_INPUT). Inside a yield,
-    //    ProcessPendingEvents() processes only the events the mask allows and returns once only
-    //    delayed ones are left, which it keeps for the main loop;
-    //  - the repaint, the port's expose work (native ports put GDK_EXPOSE/WM_PAINT in
-    //    wxEVT_CATEGORY_UI), only for a yield that asks for UI events;
-    //  - wxEventLoopBase::DoYieldFor(): pending and idle events for wxEVT_CATEGORY_ALL only,
-    //    "just once".
-    // The guard is the one Dispatch() takes: a handler that suspends inside the yield keeps
-    // the interlock held.
-    if ( wxTheApp )
+    while (Pending())
     {
-        wxWasmDispatchGuard guard;
-
-        wxTheApp->ProcessPendingEvents();
-
-        if ( (eventsToProcess & wxEVT_CATEGORY_UI) && wxTheApp->GetTopWindow() )
-            wxTheApp->Paint();
+        Dispatch();
     }
 
     wxEventLoopBase::DoYieldFor(eventsToProcess);
@@ -768,31 +634,10 @@ int wxGUIEventLoop::DoRun()
     {
         // A nested loop is a registered "nested" wait that suspends whatever
         // activation is running — a tool coroutine's own activation included.
-        // KICLOUD: W3.0P (E2.4; W3.0P lens 2): the loop's own wxWasmNestedWait, which its
-        // ScheduleExit() ends; it returns once every blocking call begun after it has
-        // returned, with the code ScheduleExit() was given (PCBJam: 0).
-        wxWasmNestedWait wait("nested");
-        if ( !wait.IsOk() )
-        {
-            // The scheduler refused the wait (dead or terminal instance): return
-            // without touching the dispatch interlock, as before.
-            --s_wxRunDepth;
-            return 0;
-        }
-        m_nestedWait = &wait;
+        wxWasmNestedWaitBody(NULL);
 
-        // The opener's chain suspends here for the dialog's whole lifetime; the
-        // interlock is zeroed for that whole span so the legitimate dispatcher keeps
-        // running meanwhile (manual save/restore: wxWasmDispatchRestore centralizes
-        // the erased-guard reporting).
-        const int savedDispatchDepth = wxWasmDispatchDepth;
-        wxWasmDispatchDepth = 0;
-        const int result = wait.Wait();   // suspends until ended and innermost
-        wxWasmDispatchRestore(savedDispatchDepth, "NestedLoop");
-
-        m_nestedWait = NULL;
         --s_wxRunDepth;
-        return result;
+        return 0;
     }
 
     if (!wxTopLevelWindows.empty())
@@ -813,11 +658,7 @@ int wxGUIEventLoop::DoRun()
     // this loop runs inline on main()'s promising activation, and the
     // per-frame wait suspends that activation until the next frame.
     // m_shouldExit, set by ScheduleExit(), ends the loop after the current tick.
-    // KICLOUD: W3.0P (E2.4, wx's ScheduleExit contract: "after any nested loops terminate";
-    // W3.0P lens 2): and only once no nested blocking call is left (PCBJam's ScheduleExit
-    // ended the innermost nested loop instead); the ticks below dispatch the events that
-    // end them.
-    while (!m_shouldExit || wxWasmNestedWait::GetCount() > 0)
+    while (!m_shouldExit)
     {
         // Schedule, don't dispatch: see wxWasmScheduleProcessEvents. The tick's
         // events run from a fresh JS task while this loop is suspended below,
@@ -843,6 +684,5 @@ int wxGUIEventLoop::DoRun()
         if (globalThis.__wxScheduler) globalThis.__wxScheduler.shutdown("main loop exited");
     });
 
-    // KICLOUD: W3.0P (E2.4): the code given to Exit()/ScheduleExit(), as in wxGTK (PCBJam: 0)
-    return m_exitcode;
+    return 0;
 }

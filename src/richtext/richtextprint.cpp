@@ -434,8 +434,6 @@ bool wxRichTextPrintout::SubstituteKeywords(wxString& str, const wxString& title
     str.Replace(wxT("@TIME@"), wxEmptyString);
 #endif
 
-    str.Replace("@USER@", wxGetUserName());
-
     str.Replace(wxT("@TITLE@"), title);
 
     return true;

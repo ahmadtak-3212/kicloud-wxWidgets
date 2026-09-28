@@ -45,7 +45,6 @@ class WXDLLIMPEXP_FWD_CORE wxDC;
 #   include "wx/generic/dragimgg.h"
 #   define wxDragImage wxGenericDragImage
 
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/dragimag.h (W3.0P): wxWASM uses the generic wxDragImage */
 #elif defined(__WXWASM__)
 #   include "wx/generic/dragimgg.h"
 #   define wxDragImage wxGenericDragImage

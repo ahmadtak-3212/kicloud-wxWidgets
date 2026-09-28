@@ -367,7 +367,6 @@ public:
     // wxUniv always uses the generic MDI implementation and so do the ports
     // without native version (although wxCocoa seems to have one -- but it's
     // probably not functional?)
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/mdi.h (W3.0P): wxWASM uses the generic MDI implementation */
     #if defined(__WXMOTIF__) || \
         defined(__WXUNIVERSAL__) || \
         defined(__WXWASM__)

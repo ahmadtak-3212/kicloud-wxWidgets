@@ -4,7 +4,6 @@
 //              attribute of the owner's DOM element.
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/tooltip.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef __WX_WASM_TOOLTIP_H__
 #define __WX_WASM_TOOLTIP_H__

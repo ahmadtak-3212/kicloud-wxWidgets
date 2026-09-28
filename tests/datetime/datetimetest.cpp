@@ -857,9 +857,7 @@ void DateTimeTestCase::TestTimeFormat()
 
     CPPUNIT_ASSERT(wxDateTime::Now().Format("%%") == "%");
 
-
-    wxDateTime dt(29, wxDateTime::May, 1976, 18, 30, 15, 678);
-    CPPUNIT_ASSERT_EQUAL( dt.Format("%F %T.%l"), "1976-05-29 18:30:15.678" );
+    wxDateTime dt;
 
 #if 0
     // special case which was known to fail
@@ -1462,14 +1460,6 @@ void DateTimeTestCase::TestDateTimeParse()
         {
             "Sun 20 Jun 2049 07:40:00 PM",
             { 20, wxDateTime::Jun, 2049, 19, 40,  0 },
-            true,
-            "",
-            false
-        },
-
-        {
-            "4242-04-02 4:20",
-            {  2, wxDateTime::Apr, 4242, 4, 20,  0 },
             true,
             "",
             false

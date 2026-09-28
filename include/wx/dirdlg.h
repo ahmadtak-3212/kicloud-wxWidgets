@@ -123,7 +123,6 @@ protected:
     #define wxDirDialog wxGenericDirDialog
 #elif defined(__WXMAC__)
     #include "wx/osx/dirdlg.h"      // Native Mac
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/dirdlg.h (W3.0P): wxWASM uses the generic wxDirDialog */
 #elif defined(__WXMOTIF__) || \
       defined(__WXX11__) || \
       defined(__WXWASM__)

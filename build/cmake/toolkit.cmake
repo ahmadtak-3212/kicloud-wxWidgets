@@ -30,20 +30,6 @@ elseif(APPLE)
     set(wxDEFAULT_TOOLKIT osx_cocoa)
     set(wxTOOLKIT_OPTIONS osx_cocoa gtk2 gtk3 gtk4 qt)
     set(wxPLATFORM OSX)
-elseif(EMSCRIPTEN)
-    # KICLOUD: W3.1 wasm toolkit selection (kicloud/docs/patches.md).
-    # KICLOUD: adapted from ahilss/wxWidgets-wasm@293bd9febaea31375447a83f0aec79f022135ac1:build/cmake/toolkit.cmake
-    # (the elseif(EMSCRIPTEN) toolkit branch; LGPL v2, see kicloud/docs/provenance.md).
-    # WebAssembly builds (Emscripten toolchain) use the wxWASM toolkit
-    # (__WXWASM__, src/wasm, include/wx/wasm), which has no native toolkit
-    # libraries. The base library is built from the Unix sources.
-    set(wxDEFAULT_TOOLKIT wasm)
-    set(wxTOOLKIT_OPTIONS wasm)
-    set(wxPLATFORM UNIX)
-    # KICLOUD: W3.1 wasm defaults, set before options.cmake so that -D on the
-    # command line still overrides them: UTF-8 wxString and the built-in PCRE2.
-    set(wxUSE_UNICODE_UTF8 ON CACHE BOOL "use UTF-8 representation for strings (Unix only)")
-    set(wxUSE_REGEX builtin CACHE STRING "enable support for wxRegEx class")
 elseif(UNIX)
     set(wxDEFAULT_TOOLKIT gtk3)
     set(wxTOOLKIT_OPTIONS gtk2 gtk3 gtk4 motif qt)
@@ -81,7 +67,6 @@ endif()
 if(wxUSE_GUI)
 set(wxTOOLKIT_INCLUDE_DIRS)
 set(wxTOOLKIT_LIBRARIES)
-set(wxTOOLKIT_LIBRARY_DIRS)
 set(wxTOOLKIT_VERSION)
 
 if(WXGTK)
@@ -96,7 +81,6 @@ if(WXGTK)
     find_package(${gtk_lib} REQUIRED)
     list(APPEND wxTOOLKIT_INCLUDE_DIRS ${${gtk_lib}_INCLUDE_DIRS})
     list(APPEND wxTOOLKIT_LIBRARIES ${${gtk_lib}_LIBRARIES})
-    list(APPEND wxTOOLKIT_LIBRARY_DIRS ${${gtk_lib}_LIBRARY_DIRS})
     list(APPEND wxTOOLKIT_DEFINITIONS ${${gtk_lib}_DEFINITIONS})
     list(APPEND wxTOOLKIT_DEFINITIONS __WXGTK__)
     set(wxTOOLKIT_VERSION ${${gtk_lib}_VERSION})
@@ -135,39 +119,24 @@ endif()
 # support, but not for Wayland-only GTK (necessarily 3 or later), which is why
 # we have to do this after find_package(GTKx) above, as this is what sets
 # wxHAVE_GDK_X11.
-if(UNIX AND NOT WIN32 AND (WXX11 OR WXMOTIF OR WXGTK2 OR (WXGTK AND wxHAVE_GDK_X11)))
+if(UNIX AND NOT APPLE AND NOT WIN32 AND (WXX11 OR WXMOTIF OR WXGTK2 OR (WXGTK AND wxHAVE_GDK_X11)))
     find_package(X11 REQUIRED)
     list(APPEND wxTOOLKIT_INCLUDE_DIRS ${X11_INCLUDE_DIR})
     list(APPEND wxTOOLKIT_LIBRARIES ${X11_LIBRARIES})
-    mark_as_advanced(X11_xcb_xkb_INCLUDE_PATH)
 endif()
 
 if(WXQT)
-    find_package(QT NAMES Qt5 REQUIRED COMPONENTS Core)
-
-    if(QT_VERSION_MAJOR EQUAL 5)
-        set(QT_COMPONENTS Core Widgets Gui OpenGL OpenGL Test)
-    elseif(QT_VERSION_MAJOR EQUAL 6)
-        set(QT_COMPONENTS Core Widgets Gui OpenGL OpenGLWidgets Test)
-    endif()
-
+    set(QT_COMPONENTS Core Widgets Gui OpenGL Test)
     foreach(QT_COMPONENT ${QT_COMPONENTS})
-        find_package(Qt${QT_VERSION_MAJOR} COMPONENTS ${QT_COMPONENT} REQUIRED)
-        list(APPEND wxTOOLKIT_INCLUDE_DIRS ${Qt${QT_VERSION_MAJOR}${QT_COMPONENT}_INCLUDE_DIRS})
-        list(APPEND wxTOOLKIT_LIBRARIES ${Qt${QT_VERSION_MAJOR}${QT_COMPONENT}_LIBRARIES})
-        list(APPEND wxTOOLKIT_DEFINITIONS ${Qt${QT_VERSION_MAJOR}${QT_COMPONENT}_COMPILE_DEFINITIONS})
+        find_package(Qt5 COMPONENTS ${QT_COMPONENT} REQUIRED)
+        list(APPEND wxTOOLKIT_INCLUDE_DIRS ${Qt5${QT_COMPONENT}_INCLUDE_DIRS})
+        list(APPEND wxTOOLKIT_LIBRARIES ${Qt5${QT_COMPONENT}_LIBRARIES})
+        list(APPEND wxTOOLKIT_DEFINITIONS ${Qt5${QT_COMPONENT}_COMPILE_DEFINITIONS})
     endforeach()
-    set(wxTOOLKIT_VERSION ${Qt${QT_VERSION_MAJOR}Core_VERSION})
-
-    if(ANDROID)
-        # A hack to remove _${ANDROID_ABI} that Qt5AndroidSupport.cmake added
-        # which breaks wx-config.
-        set(CMAKE_SHARED_LIBRARY_SUFFIX_C ${CMAKE_SHARED_LIBRARY_SUFFIX})
-        set(CMAKE_SHARED_LIBRARY_SUFFIX_CXX ${CMAKE_SHARED_LIBRARY_SUFFIX})
-    endif()
+    set(wxTOOLKIT_VERSION ${Qt5Core_VERSION})
 endif()
 
-if(wxBUILD_TOOLKIT MATCHES "osx_cocoa")
+if(APPLE)
     list(APPEND wxTOOLKIT_DEFINITIONS __WXMAC__ __WXOSX__)
 endif()
 

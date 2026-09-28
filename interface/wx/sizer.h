@@ -1611,7 +1611,7 @@ public:
     wxSizerFlags& Right();
 
     /**
-        Sets the @c wxSHAPED flag which indicates that the elements should
+        Set the @c wx_SHAPED flag which indicates that the elements should
         always keep the fixed width to height ratio equal to its original value.
     */
     wxSizerFlags& Shaped();
@@ -1888,9 +1888,6 @@ public:
         This will depend on the number of children the sizer has if
         the sizer is automatically adjusting the number of columns/rows.
 
-        Note that if the sizer is not empty, the number of rows must have been
-        set, otherwise this function triggers an assert failure and returns 0.
-
         @since 2.9.1
     */
     int GetEffectiveColsCount() const;
@@ -1900,9 +1897,6 @@ public:
 
         This will depend on the number of children the sizer has if
         the sizer is automatically adjusting the number of columns/rows.
-
-        Note that if the sizer is not empty, the number of columns must have been
-        set, otherwise this function triggers an assert failure and returns 0.
 
         @since 2.9.1
     */
@@ -2077,12 +2071,5 @@ public:
             arguments had to be overridden in the derived classes instead.
     */
     virtual void RepositionChildren(const wxSize& minSize);
-
-    /**
-       Inform sizer about the first direction that has been decided (by
-       parent item).  Returns true if it made use of the information (and
-       recalculated min size).
-    */
-    virtual bool InformFirstDirection(int direction, int size, int availableOtherDir);
 };
 

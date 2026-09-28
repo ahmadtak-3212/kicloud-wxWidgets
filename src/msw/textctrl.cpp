@@ -1355,24 +1355,7 @@ void wxTextCtrl::DoWriteText(const wxString& value, int flags)
         if ( !m_defaultStyle.IsDefault() )
         {
             long start, end;
-
-            // For the selection style to be taken into account, we must use
-            // EM_REPLACESEL below, WM_SETTEXT ignores the style, so ensure
-            // that we do, selecting all the text if necessary to do the same
-            // thing as WM_SETTEXT would do.
-            if ( !selectionOnly )
-            {
-                start = 0;
-                end = GetLastPosition();
-                SetSelection(start, end); // Select everything.
-
-                selectionOnly = true;
-            }
-            else // We're already only overwriting the selection.
-            {
-                GetSelection(&start, &end);
-            }
-
+            GetSelection(&start, &end);
             SetStyle(start, end, m_defaultStyle);
         }
 
@@ -3675,7 +3658,7 @@ bool wxTextCtrl::GetStyle(long position, wxTextAttr& style)
 
     LOGFONT lf;
     lf.lfWidth = 0;
-    lf.lfCharSet = (cf.dwMask & CFM_CHARSET) ? cf.bCharSet : DEFAULT_CHARSET;
+    lf.lfCharSet = ANSI_CHARSET; // FIXME: how to get correct charset?
     lf.lfClipPrecision = 0;
     lf.lfEscapement = 0;
     wxStrcpy(lf.lfFaceName, cf.szFaceName);

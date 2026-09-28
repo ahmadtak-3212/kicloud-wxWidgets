@@ -7,11 +7,6 @@
 # Licence:     wxWindows licence
 #############################################################################
 
-if(NOT wxUSE_DEBUGREPORT)
-    wx_append_install_headers(QA_HDR)
-    return()
-endif()
-
 wx_append_sources(QA_FILES QA)
 
 wx_add_library(wxqa ${QA_FILES})

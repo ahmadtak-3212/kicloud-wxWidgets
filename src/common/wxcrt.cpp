@@ -118,7 +118,11 @@ WXDLLIMPEXP_BASE size_t wxWC2MB(char *buf, const wchar_t *pwz, size_t n)
 
 char* wxSetlocale(int category, const char *locale)
 {
+#ifdef __WXWASM__
+    char *rv = NULL;
+#else
     char *rv = setlocale(category, locale);
+#endif
     if ( locale != NULL /* setting locale, not querying */ &&
          rv /* call was successful */ )
     {
@@ -527,7 +531,7 @@ int ConvertStringToBuf(const wxString& s, char *out, size_t outsize)
     {
         memcpy(out, buf, len+1);
     }
-    else if ( outsize > 0 ) // not enough space
+    else // not enough space
     {
         memcpy(out, buf, outsize-1);
         out[outsize-1] = '\0';
@@ -546,7 +550,7 @@ int ConvertStringToBuf(const wxString& s, wchar_t *out, size_t outsize)
     {
         memcpy(out, buf, (len+1) * sizeof(wchar_t));
     }
-    else if ( outsize > 0 ) // not enough space
+    else // not enough space
     {
         memcpy(out, buf, (outsize-1) * sizeof(wchar_t));
         out[outsize-1] = 0;
@@ -627,8 +631,7 @@ int wxVsnprintf(char *str, size_t size, const wxString& format, va_list argptr)
 
     // VsnprintfTestCase reveals that glibc's implementation of vswprintf
     // doesn't nul terminate on truncation.
-    if ( size )
-        str[size - 1] = 0;
+    str[size - 1] = 0;
 
     return rv;
 }

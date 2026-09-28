@@ -892,10 +892,9 @@ void wxNativeFontInfo::InitFromFontDescriptor(CTFontDescriptorRef desc)
 
     // determine approximate family
 
-    CTFontSymbolicTraits symbolicTraits = 0;
+    CTFontSymbolicTraits symbolicTraits;
     wxCFDictionaryRef traits((CFDictionaryRef)CTFontDescriptorCopyAttribute(desc, kCTFontTraitsAttribute));
-    if (traits)
-        traits.GetValue(kCTFontSymbolicTrait).GetValue((int32_t*)&symbolicTraits, 0);
+    traits.GetValue(kCTFontSymbolicTrait).GetValue((int32_t*)&symbolicTraits, 0);
 
     if (symbolicTraits & kCTFontMonoSpaceTrait)
         m_family = wxFONTFAMILY_TELETYPE;
@@ -1032,8 +1031,6 @@ CGFloat wxNativeFontInfo::GetCTWeight(CTFontDescriptorRef descr)
 {
     CGFloat weight;
     CFTypeRef fonttraitstype = CTFontDescriptorCopyAttribute(descr, kCTFontTraitsAttribute);
-    if (!fonttraitstype)
-        return CGFloat(0.0);
     wxCFDictionaryRef traits((CFDictionaryRef)fonttraitstype);
     traits.GetValue(kCTFontWeightTrait).GetValue(&weight, CGFloat(0.0));
     return weight;
@@ -1043,8 +1040,6 @@ CGFloat wxNativeFontInfo::GetCTwidth(CTFontDescriptorRef descr)
 {
     CGFloat weight;
     CFTypeRef fonttraitstype = CTFontDescriptorCopyAttribute(descr, kCTFontTraitsAttribute);
-    if (!fonttraitstype)
-        return CGFloat(0.0);
     wxCFDictionaryRef traits((CFDictionaryRef)fonttraitstype);
     traits.GetValue(kCTFontWidthTrait).GetValue(&weight, CGFloat(0.0));
     return weight;
@@ -1054,8 +1049,6 @@ CGFloat wxNativeFontInfo::GetCTSlant(CTFontDescriptorRef descr)
 {
     CGFloat slant;
     CFTypeRef fonttraitstype = CTFontDescriptorCopyAttribute(descr, kCTFontTraitsAttribute);
-    if (!fonttraitstype)
-        return CGFloat(0.0);
     wxCFDictionaryRef traits((CFDictionaryRef)fonttraitstype);
     traits.GetValue(kCTFontSlantTrait).GetValue(&slant, CGFloat(0.0));
     return slant;

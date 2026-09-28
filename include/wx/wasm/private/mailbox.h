@@ -4,7 +4,6 @@
 //              delivery tick delivers in order. WASM port only.
 // Licence:     wxWindows licence
 ///////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/private/mailbox.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef _WX_WASM_PRIVATE_MAILBOX_H_
 #define _WX_WASM_PRIVATE_MAILBOX_H_

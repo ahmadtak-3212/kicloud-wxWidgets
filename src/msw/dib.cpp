@@ -414,9 +414,7 @@ HBITMAP wxDIB::ConvertToBitmap(const BITMAPINFO *pbmi, HDC hdc, const void *bits
         switch ( pbmih->biCompression )
         {
             case BI_BITFIELDS:
-                // with a classic BITMAPINFOHEADER, there are 3 colour-mask DWORDs
-                // after the header. Otherwise the masks are part of the header
-                numColors = pbmih->biSize == sizeof(BITMAPINFOHEADER) ? 3 : 0;
+                numColors = 3;
                 break;
 
             case BI_RGB:
@@ -436,10 +434,7 @@ HBITMAP wxDIB::ConvertToBitmap(const BITMAPINFO *pbmi, HDC hdc, const void *bits
                 numColors = 0;
         }
 
-        // pbmih->biSize might not be the same as sizeof(BITMAPINFOHEADER)
-        // (such as in the case of a BITMAPV4HEADER or BITMAPV5HEADER);
-        // we need to advance by the number of bytes actually present
-        bits = reinterpret_cast<const char*>(pbmih) + pbmih->biSize + numColors * sizeof(RGBQUAD);
+        bits = reinterpret_cast<const char*>(pbmih + 1) + numColors * sizeof(RGBQUAD);
     }
 
     HBITMAP hbmp = ::CreateDIBitmap

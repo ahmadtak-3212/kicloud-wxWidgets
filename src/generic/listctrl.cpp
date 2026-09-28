@@ -21,7 +21,6 @@
 
 #include "wx/listctrl.h"
 
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/listctrl.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them; white list background
 #ifdef __EMSCRIPTEN__
     #include "wx/wasm/elementtracker.h"
 #endif
@@ -2061,7 +2060,6 @@ void wxListMainWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
     // done (a Windows requirement).
     wxPaintDC dc( this );
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #ifdef __EMSCRIPTEN__
     // Clear existing list elements before redrawing
     WasmUnregisterRenderedElementsByParent(GetListCtrl());
@@ -2166,7 +2164,6 @@ void wxListMainWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
                                              IsHighlighted(line),
                                              line == m_current,
                                              IsItemChecked(line) );
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 
 #ifdef __EMSCRIPTEN__
             // Register list item row for element tracking
@@ -5574,26 +5571,9 @@ long wxGenericListCtrl::FindItem( long WXUNUSED(start), const wxPoint& pt,
 
 long wxGenericListCtrl::HitTest(const wxPoint& point, int& flags, long *col) const
 {
+    // TODO: sub item hit testing
     if ( col )
-    {
         *col = -1;
-        if ( InReportView() )
-        {
-            const wxPoint unscrolled = CalcUnscrolledPosition( point );
-
-            for ( int c = 0, wsum = 0, cols = GetColumnCount();
-                  c < cols;
-                  ++c )
-            {
-                wsum += GetColumnWidth(c);
-                if ( wsum > unscrolled.x )
-                {
-                    *col = c;
-                    break;
-                }
-            }
-        }
-    }
 
     return m_mainWin->HitTest( (int)point.x, (int)point.y, flags );
 }
@@ -5766,7 +5746,6 @@ wxGenericListCtrl::GetClassDefaultAttributes(wxWindowVariant variant)
     wxUnusedVar(variant);
     wxVisualAttributes attr;
     attr.colFg = wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOXTEXT);
-    // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
     attr.colBg = *wxWHITE; //wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX);
     attr.font  = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
     return attr;

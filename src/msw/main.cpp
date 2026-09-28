@@ -65,6 +65,12 @@ extern EXCEPTION_POINTERS *wxGlobalSEInformation = NULL;
 // flag telling us whether the application wants to handle exceptions at all
 static bool gs_handleExceptions = false;
 
+static void wxFatalExit()
+{
+    // use the same exit code as abort()
+    ::ExitProcess(3);
+}
+
 unsigned long wxGlobalSEHandler(EXCEPTION_POINTERS *pExcPtrs)
 {
     if ( gs_handleExceptions && wxTheApp )
@@ -102,8 +108,7 @@ void wxSETranslator(unsigned int WXUNUSED(code), EXCEPTION_POINTERS *ep)
             // if wxApp::OnFatalException() had been called we should exit the
             // application -- but we shouldn't kill our host when we're a DLL
 #ifndef WXMAKINGDLL
-            // use the same exit code as abort()
-            ::ExitProcess(3);
+            wxFatalExit();
 #endif // not a DLL
             break;
 

@@ -32,13 +32,7 @@ case $(uname -s) in
                 return $rc
             }
 
-            # We could install lsb-release package if the command is missing,
-            # but we currently only actually use codename on the systems where
-            # it's guaranteed to be installed, so don't bother doing it for now.
-            if command -v lsb_release > /dev/null; then
-                codename=$(lsb_release --codename --short)
-            fi
-
+            codename=$(lsb_release --codename --short)
             if [ "$wxUSE_ASAN" = 1 ]; then
                 # Enable the `-dbgsym` repositories.
                 echo "deb http://ddebs.ubuntu.com ${codename} main restricted universe multiverse
@@ -91,7 +85,7 @@ case $(uname -s) in
                             libglu1-mesa-dev"
             esac
 
-            pkg_install="$pkg_install $libtoolkit_dev gawk gdb ${WX_EXTRA_PACKAGES}"
+            pkg_install="$pkg_install $libtoolkit_dev gdb ${WX_EXTRA_PACKAGES}"
 
             extra_deps="$extra_deps libcurl4-openssl-dev libsecret-1-dev libnotify-dev"
             for pkg in $extra_deps; do
@@ -119,12 +113,12 @@ case $(uname -s) in
         fi
 
         if [ -f /etc/redhat-release ]; then
-            dnf install -y ${WX_EXTRA_PACKAGES} gawk expat-devel findutils g++ git-core gspell-devel gstreamer1-plugins-base-devel gtk3-devel make libcurl-devel libGLU-devel libjpeg-devel libnotify-devel libpng-devel libSM-devel libsecret-devel libtiff-devel SDL-devel webkit2gtk4.1-devel zlib-devel
+            dnf install -y ${WX_EXTRA_PACKAGES} expat-devel findutils g++ git-core gspell-devel gstreamer1-plugins-base-devel gtk3-devel make libcurl-devel libGLU-devel libjpeg-devel libnotify-devel libpng-devel libSM-devel libsecret-devel libtiff-devel SDL-devel webkit2gtk4.1-devel zlib-devel
         fi
         ;;
 
     FreeBSD)
-        pkg install -q -y ${WX_EXTRA_PACKAGES} gawk gspell gstreamer1 gtk3 jpeg-turbo libnotify libsecret mesa-libs pkgconf png tiff webkit2-gtk_41
+        pkg install -q -y ${WX_EXTRA_PACKAGES} gspell gstreamer1 gtk3 jpeg-turbo libnotify libsecret mesa-libs pkgconf png tiff webkit2-gtk3
         ;;
 
     Darwin)

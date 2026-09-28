@@ -125,7 +125,7 @@ extern WXDLLIMPEXP_DATA_BASE(const wxDateTime) wxDefaultDateTime;
 // wxDateTime represents an absolute moment in the time
 // ----------------------------------------------------------------------------
 
-class WXDLLIMPEXP_BASE wxWARN_UNUSED wxDateTime
+class WXDLLIMPEXP_BASE wxDateTime
 {
 public:
     // types
@@ -148,7 +148,7 @@ public:
         Local,
 
         // zones from GMT (= Greenwich Mean Time): they're guaranteed to be
-        // consequent numbers, so writing something like `GMT0 + offset` is
+        // consequent numbers, so writing something like `GMT0 + offset' is
         // safe if abs(offset) <= 12
 
         // underscore stands for minus

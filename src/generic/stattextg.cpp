@@ -91,7 +91,6 @@ wxSize wxGenericStaticText::DoGetBestClientSize() const
         return m_markupText->Measure(dc);
 #endif // wxUSE_MARKUP
 
-    // KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/stattextg.cpp (W3.0P): best size from the label text without mnemonics
     return dc.GetMultiLineTextExtent(GetLabelText());
 }
 

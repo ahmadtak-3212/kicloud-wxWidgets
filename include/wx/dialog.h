@@ -11,7 +11,6 @@
 #ifndef _WX_DIALOG_H_BASE_
 #define _WX_DIALOG_H_BASE_
 
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/dialog.h (W3.0P): asynchronous ShowModal(callback) overload used by the wasm port (modal dialogs complete through a callback under JSPI), and the wxWASM dialog dispatch */
 #include <functional>
 
 #include "wx/toplevel.h"
@@ -72,7 +71,6 @@ public:
 
     // define public wxDialog methods to be implemented by the derived classes
     virtual int ShowModal() = 0;
-    /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
     virtual void ShowModal(std::function<void (int)> callback) = 0;
     virtual void EndModal(int retCode) = 0;
     virtual bool IsModal() const = 0;
@@ -384,7 +382,6 @@ public:
         #include "wx/osx/dialog.h"
     #elif defined(__WXQT__)
         #include "wx/qt/dialog.h"
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 #elif defined(__WXWASM__)
         #include "wx/wasm/dialog.h"
     #endif

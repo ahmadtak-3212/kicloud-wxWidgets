@@ -36,8 +36,6 @@ wx_add_demo(forty
         about.htm
     LIBRARIES
         wxhtml wxxml
-    DEPENDS
-        wxUSE_HTML
     )
 
 wx_add_demo(fractal
@@ -64,8 +62,6 @@ wx_add_demo(poem
         wxpoem.txt wxpoem.dat wxpoem.idx
     LIBRARIES
         wxhtml
-    DEPENDS
-        wxUSE_HTML
     NAME
         wxpoem
     )

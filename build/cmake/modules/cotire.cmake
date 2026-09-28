@@ -37,13 +37,13 @@ set(__COTIRE_INCLUDED TRUE)
 if (NOT CMAKE_SCRIPT_MODE_FILE)
 	cmake_policy(PUSH)
 endif()
-cmake_minimum_required(VERSION 3.5...4.1)
+cmake_minimum_required(VERSION 2.8.12)
 if (NOT CMAKE_SCRIPT_MODE_FILE)
 	cmake_policy(POP)
 endif()
 
 set (COTIRE_CMAKE_MODULE_FILE "${CMAKE_CURRENT_LIST_FILE}")
-set (COTIRE_CMAKE_MODULE_VERSION "1.8.1")
+set (COTIRE_CMAKE_MODULE_VERSION "1.8.0")
 
 # activate select policies
 if (POLICY CMP0025)
@@ -111,6 +111,7 @@ if (POLICY CMP0055)
 	cmake_policy(SET CMP0055 NEW)
 endif()
 
+include(CMakeParseArguments)
 include(ProcessorCount)
 
 function (cotire_get_configuration_types _configsVar)
@@ -1067,10 +1068,10 @@ macro (cotire_check_ignore_header_file_path _headerFile _headerIsIgnoredVar)
 		set (${_headerIsIgnoredVar} TRUE)
 	elseif (IS_DIRECTORY "${_headerFile}")
 		set (${_headerIsIgnoredVar} TRUE)
-	elseif ("${_headerFile}" MATCHES "\\.\\.|[_-]fixed")
-		# heuristic: ignore headers with embedded parent directory references or "-fixed" or "_fixed" in path
+	elseif ("${_headerFile}" MATCHES "\\.\\.|[_-]fixed" AND "${_headerFile}" MATCHES "\\.h$")
+		# heuristic: ignore C headers with embedded parent directory references or "-fixed" or "_fixed" in path
 		# these often stem from using GCC #include_next tricks, which may break the precompiled header compilation
-		# with the error message "error: no include path in which to search for header"
+		# with the error message "error: no include path in which to search for header.h"
 		set (${_headerIsIgnoredVar} TRUE)
 	else()
 		set (${_headerIsIgnoredVar} FALSE)
@@ -1694,9 +1695,6 @@ function (cotire_add_pch_compilation_flags _language _compilerID _compilerVersio
 				endif()
 			endif()
 		else()
-			file (TO_NATIVE_PATH "${_prefixFile}" _prefixFileNative)
-			file (TO_NATIVE_PATH "${_pchFile}" _pchFileNative)
-			file (TO_NATIVE_PATH "${_hostFile}" _hostFileNative)
 			# Clang-cl.exe options used
 			# /Yc creates a precompiled header file
 			# /Fp specifies precompiled header binary file name
@@ -1709,10 +1707,10 @@ function (cotire_add_pch_compilation_flags _language _compilerID _compilerVersio
 			if (_flags)
 				# append to list
 				list (APPEND _flags "${_sourceFileType${_language}}"
-						"/Yc${_prefixFileNative}" "/Fp${_pchFileNative}" "/FI${_prefixFileNative}" /Zs "${_hostFileNative}")
+						"/Yc${_prefixFile}" "/Fp${_pchFile}" "/FI${_prefixFile}" /Zs "${_hostFile}")
 			else()
 				# return as a flag string
-				set (_flags "/Yc\"${_prefixFileNative}\" /Fp\"${_pchFileNative}\" /FI\"${_prefixFileNative}\"")
+				set (_flags "/Yc\"${_prefixFile}\" /Fp\"${_pchFile}\" /FI\"${_prefixFile}\"")
 			endif()
 		endif()
 	elseif (_compilerID MATCHES "Intel")
@@ -1847,28 +1845,26 @@ function (cotire_add_prefix_pch_inclusion_flags _language _compilerID _compilerV
 				set (_flags "-include \"${_prefixFile}\"")
 			endif()
 		else()
-			file (TO_NATIVE_PATH "${_prefixFile}" _prefixFileNative)
 			# Clang-cl.exe options used
 			# /Yu uses a precompiled header file during build
 			# /Fp specifies precompiled header binary file name
 			# /FI forces inclusion of file
 			if (_pchFile)
-				file (TO_NATIVE_PATH "${_pchFile}" _pchFileNative)
 				if (_flags)
 					# append to list
-					list (APPEND _flags "/Yu${_prefixFileNative}" "/Fp${_pchFileNative}" "/FI${_prefixFileNative}")
+					list (APPEND _flags "/Yu${_prefixFile}" "/Fp${_pchFile}" "/FI${_prefixFile}")
 				else()
 					# return as a flag string
-					set (_flags "/Yu\"${_prefixFileNative}\" /Fp\"${_pchFileNative}\" /FI\"${_prefixFileNative}\"")
+					set (_flags "/Yu\"${_prefixFile}\" /Fp\"${_pchFile}\" /FI\"${_prefixFile}\"")
 				endif()
 			else()
 				# no precompiled header, force inclusion of prefix header
 				if (_flags)
 					# append to list
-					list (APPEND _flags "/FI${_prefixFileNative}")
+					list (APPEND _flags "/FI${_prefixFile}")
 				else()
 					# return as a flag string
-					set (_flags "/FI\"${_prefixFileNative}\"")
+					set (_flags "/FI\"${_prefixFile}\"")
 				endif()
 			endif()
 		endif()
@@ -2050,10 +2046,8 @@ function (cotire_check_precompiled_header_support _language _target _msgVar)
 			else()
 				set (_ccacheExe "${_launcher}")
 			endif()
-			# ccache 3.7.0 replaced --print-config with --show-config
-			# use -p instead, which seems to work for all version for now, sigh
 			execute_process(
-				COMMAND "${_ccacheExe}" "-p"
+				COMMAND "${_ccacheExe}" "--print-config"
 				WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 				RESULT_VARIABLE _result
 				OUTPUT_VARIABLE _ccacheConfig OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -2402,9 +2396,6 @@ function (cotire_setup_pch_file_compilation _language _target _targetScript _pre
 				"${_language}" "${CMAKE_${_language}_COMPILER_ID}" "${CMAKE_${_language}_COMPILER_VERSION}"
 				"${_prefixFile}" "${_pchFile}" "${_hostFile}" _flags)
 			set_property (SOURCE ${_hostFile} APPEND_STRING PROPERTY COMPILE_FLAGS " ${_flags} ")
-			if (COTIRE_DEBUG)
-				message (STATUS "set_property: SOURCE ${_hostFile} APPEND_STRING COMPILE_FLAGS ${_flags}")
-			endif()
 			set_property (SOURCE ${_hostFile} APPEND PROPERTY OBJECT_OUTPUTS "${_pchFile}")
 			# make object file generated from host file depend on prefix header
 			set_property (SOURCE ${_hostFile} APPEND PROPERTY OBJECT_DEPENDS "${_prefixFile}")
@@ -2457,9 +2448,6 @@ function (cotire_setup_pch_file_inclusion _language _target _wholeTarget _prefix
 				"${_language}" "${CMAKE_${_language}_COMPILER_ID}" "${CMAKE_${_language}_COMPILER_VERSION}"
 				"${_prefixFile}" "${_pchFile}" _flags)
 			set_property (SOURCE ${_sourceFiles} APPEND_STRING PROPERTY COMPILE_FLAGS " ${_flags} ")
-			if (COTIRE_DEBUG)
-				message (STATUS "set_property: SOURCE ${_sourceFiles} APPEND_STRING COMPILE_FLAGS ${_flags}")
-			endif()
 			# make object files generated from source files depend on precompiled header
 			set_property (SOURCE ${_sourceFiles} APPEND PROPERTY OBJECT_DEPENDS "${_pchFile}")
 		endif()
@@ -2473,9 +2461,6 @@ function (cotire_setup_pch_file_inclusion _language _target _wholeTarget _prefix
 				"${_language}" "${CMAKE_${_language}_COMPILER_ID}" "${CMAKE_${_language}_COMPILER_VERSION}"
 				"${_prefixFile}" "${_pchFile}" _flags)
 			set_property (SOURCE ${_sourceFiles} APPEND_STRING PROPERTY COMPILE_FLAGS " ${_flags} ")
-			if (COTIRE_DEBUG)
-				message (STATUS "set_property: SOURCE ${_sourceFiles} APPEND_STRING COMPILE_FLAGS ${_flags}")
-			endif()
 			# mark sources as cotired to prevent them from being used in another cotired target
 			set_source_files_properties(${_sourceFiles} PROPERTIES COTIRE_TARGET "${_target}")
 		endif()
@@ -2493,9 +2478,6 @@ function (cotire_setup_prefix_file_inclusion _language _target _prefixFile)
 		"${_language}" "${CMAKE_${_language}_COMPILER_ID}" "${CMAKE_${_language}_COMPILER_VERSION}"
 		"${_prefixFile}" "${_pchFile}" _flags)
 	set_property (SOURCE ${_sourceFiles} APPEND_STRING PROPERTY COMPILE_FLAGS " ${_flags} ")
-	if (COTIRE_DEBUG)
-		message (STATUS "set_property: SOURCE ${_sourceFiles} APPEND_STRING COMPILE_FLAGS ${_flags}")
-	endif()
 	# mark sources as cotired to prevent them from being used in another cotired target
 	set_source_files_properties(${_sourceFiles} PROPERTIES COTIRE_TARGET "${_target}")
 	# make object files generated from source files depend on prefix header
@@ -2613,9 +2595,6 @@ function (cotire_setup_target_pch_usage _languages _target _wholeTarget)
 						"${_language}" "${CMAKE_${_language}_COMPILER_ID}" "${CMAKE_${_language}_COMPILER_VERSION}"
 						"${_prefixFile}" "${_pchFile}" _options)
 					set_property(TARGET ${_target} APPEND PROPERTY ${_options})
-					if (COTIRE_DEBUG)
-						message (STATUS "set_property: TARGET ${_target} APPEND PROPERTY ${_options}")
-					endif()
 				endif()
 			endif()
 		endif()

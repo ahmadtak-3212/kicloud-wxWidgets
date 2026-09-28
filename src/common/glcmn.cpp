@@ -89,7 +89,6 @@ bool wxGLCanvasBase::SetCurrent(const wxGLContext& context) const
 
 bool wxGLCanvasBase::SetColour(const wxString& colour)
 {
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/glcmn.cpp (W3.0P): WebGL has no fixed-function pipeline: wxGLAPI immediate-mode emulation is empty and SetColour() fails
 #ifdef __WXWASM__
     // WebGL doesn't support legacy glColor/glIndex functions
     // Modern applications should use shaders instead
@@ -124,7 +123,6 @@ bool wxGLCanvasBase::SetColour(const wxString& colour)
     }
 #endif
     return true;
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #endif // __WXWASM__
 }
 
@@ -312,7 +310,7 @@ bool wxGLCanvasBase::ParseAttribList(const int *attribList,
                 src++;
                 break;
 
-            case WX_GL_COMPAT_PROFILE:
+            case wx_GL_COMPAT_PROFILE:
                 if ( ctxAttrs )
                     ctxAttrs->CompatibilityProfile();
                 break;
@@ -386,7 +384,6 @@ bool wxGLCanvasBase::ParseAttribList(const int *attribList,
 // compatibility layer for OpenGL 3 and OpenGL ES
 // ============================================================================
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #ifdef __WXWASM__
 // WebGL doesn't support legacy OpenGL functions (glBegin/glEnd, glVertex,
 // glColor, etc.) or the fixed function pipeline. Modern applications should
@@ -669,7 +666,6 @@ void wxGLAPI::glEnd()
 #endif
 }
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #endif // !__WXWASM__
 
 #endif // wxUSE_GLCANVAS

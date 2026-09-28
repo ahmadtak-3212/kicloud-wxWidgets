@@ -7,11 +7,6 @@
 # Licence:     wxWindows licence
 #############################################################################
 
-if(NOT wxUSE_MEDIACTRL)
-    wx_append_install_headers(MEDIA_CMN_HDR)
-    return()
-endif()
-
 wx_append_sources(MEDIA_FILES MEDIA_CMN)
 
 if(WXMSW)
@@ -22,11 +17,8 @@ elseif(WXOSX_IPHONE)
     wx_append_sources(MEDIA_FILES MEDIA_OSX_IPHONE)
 elseif(WXGTK)
     wx_append_sources(MEDIA_FILES MEDIA_UNIX)
-    wx_append_sources(MEDIA_FILES MEDIA_GTK)
 elseif(WXQT)
     wx_append_sources(MEDIA_FILES MEDIA_QT)
-elseif(WXX11)
-    wx_append_sources(MEDIA_FILES MEDIA_UNIX)
 endif()
 
 wx_add_library(wxmedia ${MEDIA_FILES})

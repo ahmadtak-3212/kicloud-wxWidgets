@@ -5,7 +5,6 @@
 // Copyright:   (c) 2022 Adam Hilss
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/wasm/app.cpp (W3.0P; kicloud/docs/provenance.md)
 
 #include "wx/wxprec.h"
 
@@ -17,7 +16,6 @@
 #include "wx/log.h"
 #include "wx/menu.h"
 #include "wx/nonownedwnd.h"
-#include "wx/textctrl.h"  // KICLOUD: W3.0P (TODO.md E3): wxTE_PROCESS_TAB, wxWasmNavigateByTab()
 #include "wx/toplevel.h"
 #include "wx/utils.h"
 #include "wx/window.h"
@@ -39,18 +37,6 @@ extern "C" void wxWasmRunOnDispatchContext(void (*fn)(void *), void *arg);
 #include <deque>
 #include <string>
 #include <emscripten/html5.h>
-
-// KICLOUD: W3.0P (TODO.md W3.0P ABI bullet: no PCBJam link flag may leak in): the
-// emscripten runtime pieces the port's JavaScript uses - the --pre-js runtime
-// (src/wasm/js/wx.js, wx-dom.js, scheduler.js: ccall, stackSave/stackRestore,
-// HEAP8/HEAPU8/HEAP32, stringToUTF8, FS; _malloc is exported for stringToNewUTF8)
-// and the EM_JS code of wx/wasm/private/dom.h (stringToNewUTF8). PCBJam put
-// -sEXPORTED_RUNTIME_METHODS=ccall,HEAP8,HEAPU8,HEAP32,stackSave,stackRestore and
-// -sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=$stringToNewUTF8 on every program's link line;
-// emcc keeps only the last value of such a list setting, so a program that sets its
-// own list silently lost them. Declared here they are linked whenever wxApp is, and
-// the JavaScript calls the glue's in-scope names instead of Module.<name>.
-EM_JS_DEPS(wxwasm_runtime, "$ccall,$stackSave,$stackRestore,$stringToNewUTF8,$stringToUTF8,$FS,$HEAP8,$HEAPU8,$HEAP32");
 
 void RegisterEmscriptenCallbacks(wxApp* app);
 
@@ -314,31 +300,6 @@ void wxApp::ProcessPendingEvents()
     // this particular drain: under-posting is bounded to one drain,
     // over-posting is a duplicate motion the receiver treats as a no-op.
     m_parkedMotionQueued = false;
-
-    // KICLOUD: W3.0P (kicloud/TODO.md E2.5; K.11 retry, round r2). A pass over the pending
-    // events can run inside another one: wxGUIEventLoop::DoYieldFor() processes the events a
-    // selective yield allows, and a handler it runs may yield again (wxSafeYield(), KiCad's
-    // DrainPendingEvents()). The outer pass may have set aside ("delayed") the handlers whose
-    // events its mask does not allow, and wxAppConsoleBase::ProcessPendingEvents() refuses to
-    // start while any are set aside: its wxCHECK_RET("this helper list should be empty")
-    // asserts and returns with m_handlersWithPendingEventsLocker still entered, so the inner
-    // yield processed nothing, and a thread that later queues an event would block on that
-    // lock. Put them back first, as the outer pass does when it ends. The inner pass then
-    // processes what its own mask allows and sets the rest aside again; when the outer pass
-    // resumes, it sets aside again whatever its mask still does not allow. A handler that is
-    // back on the list already (an event was queued for it meanwhile) is not added twice: a
-    // duplicate entry would outlive the handler's last event. Outside a nested pass the
-    // helper list is empty here and nothing changes.
-    wxENTER_CRIT_SECT(m_handlersWithPendingEventsLocker);
-    for ( size_t n = 0; n < m_handlersWithPendingDelayedEvents.GetCount(); n++ )
-    {
-        wxEvtHandler* const handler = m_handlersWithPendingDelayedEvents[n];
-        if ( m_handlersWithPendingEvents.Index(handler) == wxNOT_FOUND )
-            m_handlersWithPendingEvents.Add(handler);
-    }
-    m_handlersWithPendingDelayedEvents.Clear();
-    wxLEAVE_CRIT_SECT(m_handlersWithPendingEventsLocker);
-
     wxAppBase::ProcessPendingEvents();
 }
 
@@ -1015,29 +976,6 @@ bool TranslateMenuAccel(const wxKeyEvent &event)
 #endif
 }
 
-// KICLOUD: W3.0P (TODO.md E3: "Tab navigation [is] still routed to wx"; W3.0P lens 2 of the
-// K.11 retry, round r2 review). This port has no native tab traversal (wx/features.h defines
-// wxHAS_NATIVE_TAB_TRAVERSAL for GTK and Qt only), so wxControlContainer moves the focus when
-// it gets a wxNavigationKeyEvent, and PCBJam's port never sent one: an unconsumed Tab moved no
-// focus. As wxX11 does (src/x11/app.cpp), a Tab that the wxEVT_CHAR_HOOK, wxEVT_KEY_DOWN and
-// wxEVT_CHAR handlers all left unhandled navigates from the focused window
-// (wxWindowBase::HandleAsNavigationKey: Shift = backward, Ctrl = window change, e.g. notebook
-// pages). Not from a top-level window (no container to navigate in), a window with
-// wxWANTS_CHARS (it wants every key, the wxMSW rule) or a wxTextCtrl with wxTE_PROCESS_TAB
-// (Tab is its input).
-bool wxWasmNavigateByTab(const wxKeyEvent &event)
-{
-    wxWindow *focus = wxWindow::FindFocus();
-    if (focus == NULL || focus->IsTopLevel() || focus->HasFlag(wxWANTS_CHARS))
-        return false;
-#if wxUSE_TEXTCTRL
-    if (wxDynamicCast(focus, wxTextCtrl) != NULL && focus->HasFlag(wxTE_PROCESS_TAB))
-        return false;
-#endif
-    wxWasmDispatchGuard guard;
-    return focus->HandleAsNavigationKey(event);
-}
-
 void wxWasmRunKeyJob(void *arg)
 {
     wxWasmKeyJob *job = static_cast<wxWasmKeyJob *>(arg);
@@ -1060,22 +998,13 @@ void wxWasmRunKeyJob(void *arg)
                 job->preventDefault = true;
             }
             // The browser does not generate char events for some key codes
-            // KICLOUD: W3.0P (TODO.md E3): nor for Tab, which navigates when nothing
-            // KICLOUD: handles it (wxWasmNavigateByTab).
-            else if (KeyCodeNeedsCharEvent(event.GetKeyCode()) ||
-                     event.GetKeyCode() == WXK_TAB)
+            else if (KeyCodeNeedsCharEvent(event.GetKeyCode()))
             {
-                bool handled = app->HandleKeyEvent(&event);
-                if (!handled)
+                if (!app->HandleKeyEvent(&event))
                 {
                     wxKeyEvent charEvent(wxEVT_CHAR, event);
-                    handled = app->HandleKeyEvent(&charEvent);
+                    app->HandleKeyEvent(&charEvent);
                 }
-                // Never while another chain is parked, as for the menubar
-                // accelerators above (HandleKeyEvent then queues the events and
-                // reports them handled anyway).
-                if (!handled && event.GetKeyCode() == WXK_TAB && !wxWasmDispatchParked())
-                    wxWasmNavigateByTab(event);
             }
             else
             {
@@ -1124,48 +1053,6 @@ void wxWasmRunKeyJob(void *arg)
     wxWasmFinishDomJob(job);
 }
 
-// KICLOUD: W3.0P (TODO.md E2.1/E2.2, Part F.4; kicloud W3.0P lens 2): the window
-// 'resize' and 'focus'/'blur' html5 callbacks ran HandleSizeEvent /
-// HandleActivateEvent synchronously on their plain (non-promising) entry, so a
-// wxEVT_SIZE or wxEVT_ACTIVATE handler that reached a wait (a modal, a yield)
-// died with SuspendError. They now hand their work to the scheduler as DOM jobs,
-// like the key/mouse/wheel/touch callbacks above.
-struct wxWasmSizeJob : wxWasmDomJob
-{
-    wxSize size;
-};
-
-// A resize storm (dragging the browser window) queues at most one job: later
-// callbacks update the queued job's size, which it reads when it runs.
-wxWasmSizeJob *wxWasmQueuedSizeJob = NULL;
-
-void wxWasmRunSizeJob(void *arg)
-{
-    wxWasmSizeJob *job = static_cast<wxWasmSizeJob *>(arg);
-    if (wxWasmQueuedSizeJob == job)
-        wxWasmQueuedSizeJob = NULL;
-
-    wxSizeEvent event(job->size);
-    job->app->HandleSizeEvent(event);
-
-    wxWasmFinishDomJob(job);
-}
-
-struct wxWasmActivateJob : wxWasmDomJob
-{
-    bool active = false;
-};
-
-void wxWasmRunActivateJob(void *arg)
-{
-    wxWasmActivateJob *job = static_cast<wxWasmActivateJob *>(arg);
-
-    wxActivateEvent event(wxEVT_ACTIVATE, job->active);
-    job->app->HandleActivateEvent(&event);
-
-    wxWasmFinishDomJob(job);
-}
-
 }  // namespace
 
 // A keydown whose browser default (if any) is harmless and whose 'keypress'
@@ -1201,32 +1088,27 @@ EM_BOOL KeyCallback(int eventType,
     // Firefox does not fire focusout when a focused element is removed
     // (e.g. a wizard page destroyed mid-typing), which left the flag
     // stuck and swallowed every key for the rest of the session.
-    // KICLOUD: W3.0P (TODO.md E3 "Keyboard"; W3.0P lens 2 of the K.11 retry, round r2
-    // KICLOUD: review): which keys still go to wx from a DOM editable - Escape, Tab
-    // KICLOUD: navigation and accelerators (app-owned chords: native menu accelerators fire
-    // KICLOUD: regardless of focus, and the browser default of Cmd/Ctrl+S = save page is never
-    // KICLOUD: wanted) - is decided by wxDomRouteKey() in src/wasm/js/wx-dom.js, the rule
-    // KICLOUD: that the wx editable controls' own listeners apply too; editing chords
-    // KICLOUD: (Cmd+C/V/X/A/Z/...) stay with the input. PCBJam let only Escape and Ctrl/Cmd+S
-    // KICLOUD: through here, and the editables' listeners stopped even those.
-    const char *routeType = eventType == EMSCRIPTEN_EVENT_KEYDOWN ? "keydown"
-                          : eventType == EMSCRIPTEN_EVENT_KEYUP   ? "keyup"
-                                                                  : "keypress";
-    const std::string domCode = wxWasmKeyEventCode(*emscriptenEvent);
-    if (!EM_ASM_INT({
-            if (typeof document === 'undefined') return 1;
+    if (EM_ASM_INT({
+            if (typeof document === 'undefined') return 0;
             var ae = document.activeElement;
-            var editable = !!ae && (ae.tagName === 'INPUT' ||
-                                    ae.tagName === 'TEXTAREA' ||
-                                    ae.tagName === 'SELECT' ||
-                                    ae.isContentEditable);
-            var wxOwned = editable && !!ae.closest && !!ae.closest('.wx-dom-control');
-            return window.wxDomRouteKey(UTF8ToString($0), UTF8ToString($1), UTF8ToString($2),
-                                        $3, !!$4, !!$5, !!$6, editable, wxOwned) ? 1 : 0;
-        }, routeType, emscriptenEvent->key, domCode.c_str(), emscriptenEvent->keyCode,
-           emscriptenEvent->ctrlKey, emscriptenEvent->metaKey, emscriptenEvent->altKey))
+            return (ae && (ae.tagName === 'INPUT' ||
+                           ae.tagName === 'TEXTAREA' ||
+                           ae.tagName === 'SELECT' ||
+                           ae.isContentEditable)) ? 1 : 0;
+        }))
     {
-        return EM_FALSE;
+        // App-owned chords still reach wx even from inside a text field —
+        // native menu accelerators fire regardless of focus, and the
+        // browser default (Cmd/Ctrl+S = save page) is never wanted.
+        // Editing chords (Cmd+C/V/X/A/Z/…) stay with the input.
+        const char *key = emscriptenEvent->key;
+        const bool saveChord =
+            (emscriptenEvent->ctrlKey || emscriptenEvent->metaKey) &&
+            !emscriptenEvent->altKey &&
+            (key[0] == 's' || key[0] == 'S') && key[1] == '\0';
+
+        if (strcmp(key, "Escape") != 0 && !saveChord)
+            return EM_FALSE;
     }
 
     wxApp* app = static_cast<wxApp*>(userData);
@@ -1242,6 +1124,8 @@ EM_BOOL KeyCallback(int eventType,
                        event.GetKeyCode(),
                        static_cast<const char*>(key_char.utf8_str()));
         */
+
+        const std::string domCode = wxWasmKeyEventCode(*emscriptenEvent);
 
         if (eventType == EMSCRIPTEN_EVENT_KEYPRESS)
         {
@@ -1403,22 +1287,9 @@ EM_BOOL ResizeCallback(int WXUNUSED(eventType),
         return mainWindow.offsetTop;
     });
     wxSize size(emscriptenEvent->windowInnerWidth, emscriptenEvent->windowInnerHeight - offset);
+    wxSizeEvent event(size);
 
-    // KICLOUD: W3.0P (E2.1/E2.2): wxEVT_SIZE handlers run on a promising
-    // activation (a DOM job, see wxWasmRunSizeJob), never on this plain entry.
-    if (wxWasmQueuedSizeJob != NULL)
-    {
-        wxWasmQueuedSizeJob->size = size;   // still queued: it takes the newest size
-        return true;
-    }
-
-    wxWasmSizeJob* job = new wxWasmSizeJob();
-    job->app = app;
-    job->size = size;
-    wxWasmQueuedSizeJob = job;
-
-    if (wxWasmRunDomJob(&wxWasmRunSizeJob, job))
-        delete job;
+    app->HandleSizeEvent(event);
 
     return true;
 }
@@ -1430,29 +1301,25 @@ EM_BOOL FocusCallback(int eventType,
     //printf("FocusCallback\n");
     wxApp* app = static_cast<wxApp*>(userData);
 
-    // KICLOUD: W3.0P (E2.1/E2.2): wxEVT_ACTIVATE handlers run on a promising
-    // activation (a DOM job, see wxWasmRunActivateJob), never on this plain entry.
-    wxWasmActivateJob* job = new wxWasmActivateJob();
-    job->app = app;
-    job->active = (eventType == EMSCRIPTEN_EVENT_FOCUS);
-
-    if (wxWasmRunDomJob(&wxWasmRunActivateJob, job))
-        delete job;
+    wxActivateEvent event(wxEVT_ACTIVATE, eventType == EMSCRIPTEN_EVENT_FOCUS);
+    app->HandleActivateEvent(&event);
 
     return true;
 }
 
-// KICLOUD: W3.0P (E2.2; kicloud W3.0P lens 2): PCBJam's UnloadCallback sent
-// wxEVT_CLOSE_WINDOW synchronously from the 'beforeunload' html5 callback. A
-// close handler that asks "Save changes?" with a modal cannot suspend there
-// (SuspendError), a handler that does not veto destroyed the app while the user
-// might still choose to stay, and nothing queued can be relied on because the
-// page may be gone before it runs. The browser needs its answer synchronously,
-// so it is decided in JS from state wasm has published: RegisterEmscriptenCallbacks
-// installs a 'beforeunload' listener that asks the browser to confirm leaving
-// while any top-level window is marked modified (wxTopLevelWindow::OSXSetModified,
-// published by src/wasm/toplevel.cpp into globalThis.__wxModifiedWindows). No wx
-// code runs on 'beforeunload'.
+const char *UnloadCallback(int WXUNUSED(eventType),
+                           const void *WXUNUSED(emscriptenEvent),
+                           void *userData)
+{
+    //printf("UnloadCallback\n");
+    wxApp* app = static_cast<wxApp*>(userData);
+
+    wxCloseEvent event(wxEVT_CLOSE_WINDOW);
+    event.SetCanVeto(true);
+    app->HandleCloseEvent(&event);
+
+    return event.GetVeto() ? "veto" : "";
+}
 
 }
 
@@ -1514,24 +1381,8 @@ void RegisterEmscriptenCallbacks(wxApp* app)
     result = emscripten_set_blur_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, app, false, FocusCallback);
     wxASSERT(result == EMSCRIPTEN_RESULT_SUCCESS);
 
-    // KICLOUD: W3.0P (E2.2): 'beforeunload' is answered in JS from the published
-    // modified-window set (see the note above RegisterEmscriptenCallbacks); this
-    // replaces emscripten_set_beforeunload_callback(app, UnloadCallback).
-    EM_ASM({
-        if (typeof window === 'undefined' || window.__wxBeforeUnloadInstalled)
-            return;
-        window.__wxBeforeUnloadInstalled = true;
-        if (!(globalThis.__wxModifiedWindows instanceof Set))
-            globalThis.__wxModifiedWindows = new Set();
-        window.addEventListener('beforeunload', function (e) {
-            if (globalThis.__wxModifiedWindows.size > 0)
-            {
-                e.preventDefault();
-                e.returnValue = 'wx-modified';  // older engines need a non-empty value
-                return 'wx-modified';
-            }
-        });
-    });
+    result = emscripten_set_beforeunload_callback(app, UnloadCallback);
+    wxASSERT(result == EMSCRIPTEN_RESULT_SUCCESS);
 
     // Initialize HTML5 drag and drop handlers
     EM_ASM({

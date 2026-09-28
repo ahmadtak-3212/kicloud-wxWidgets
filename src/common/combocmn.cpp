@@ -118,7 +118,7 @@ wxCONSTRUCTOR_5( wxComboBox, wxWindow*, Parent, wxWindowID, Id, \
 
 #define BMP_BUTTON_MARGIN                       4
 
-#define DEFAULT_POPUP_ITEMS                     21
+#define DEFAULT_POPUP_HEIGHT                    400
 
 #define DEFAULT_TEXT_INDENT                     3
 
@@ -162,7 +162,6 @@ wxCONSTRUCTOR_5( wxComboBox, wxWindow*, Parent, wxWindowID, Id, \
 #undef COMBO_MARGIN
 #define COMBO_MARGIN                  FOCUS_RING
 
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/common/combocmn.cpp (W3.0P): wxWASM combo control popup settings (transient popup window works; no focus ring)
 #elif defined(__WXWASM__)
 
 #include "wx/dialog.h"
@@ -1823,7 +1822,7 @@ void wxComboCtrlBase::HandleNormalMouseEvent( wxMouseEvent& event )
             // relay (some) mouse events to the popup
             m_popup->GetEventHandler()->ProcessEvent(event);
         }
-        else if ( event.GetWheelAxis() == wxMOUSE_WHEEL_VERTICAL &&
+        else if ( event.GetWheelAxis() == 0 &&
                   event.GetWheelRotation() != 0 &&
                   event.GetModifiers() == 0 )
         {
@@ -2174,13 +2173,8 @@ void wxComboCtrlBase::ShowPopup()
 
     wxASSERT( !m_popup || m_popup == popup ); // Consistency check.
 
-    int heightPopup = m_heightPopup;
-    if (heightPopup <= 0)
-        // estimated height for a row containig text
-        heightPopup = DEFAULT_POPUP_ITEMS * (GetCharHeight() + FromDIP(4));
-
     wxSize adjustedSize = m_popupInterface->GetAdjustedSize(widthPopup,
-                                                            heightPopup,
+                                                            m_heightPopup<=0?DEFAULT_POPUP_HEIGHT:m_heightPopup,
                                                             maxHeightPopup);
 
     popup->SetSize(adjustedSize);

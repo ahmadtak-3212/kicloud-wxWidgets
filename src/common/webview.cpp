@@ -362,11 +362,6 @@ void wxWebView::InitFactoryMap()
         (new wxWebViewFactoryEdge));
 #endif
 
-#elif defined(__WXWASM__)
-    // KICLOUD: W3.0P (kicloud/docs/patches.md): the wxWASM backend
-    // (wxUSE_WEBVIEW_WASM, an iframe) is kicloud task W3.16; until it exists no
-    // factory is registered, so wxWebView::New() returns NULL as for an
-    // unavailable backend, and the library builds with the common classes only.
 #else
     if(m_factoryMap.find(wxWebViewBackendWebKit) == m_factoryMap.end())
         RegisterFactory(wxWebViewBackendWebKit, wxSharedPtr<wxWebViewFactory>

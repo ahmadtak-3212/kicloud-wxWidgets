@@ -104,7 +104,6 @@ protected:
     #include "wx/msw/nonownedwnd.h"
 #elif defined(__WXQT__)
     #include "wx/qt/nonownedwnd.h"
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/nonownedwnd.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
 #elif defined(__WXWASM__)
     #include "wx/wasm/nonownedwnd.h"
 #else

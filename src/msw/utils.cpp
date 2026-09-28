@@ -615,12 +615,12 @@ BOOL CALLBACK wxEnumFindByPidProc(HWND hwnd, LPARAM lParam)
     return TRUE;
 }
 
-int wxKillAllChildren(long pid, wxSignal sig, wxKillError *krc, int flags);
+int wxKillAllChildren(long pid, wxSignal sig, wxKillError *krc);
 
 int wxKill(long pid, wxSignal sig, wxKillError *krc, int flags)
 {
     if (flags & wxKILL_CHILDREN)
-        wxKillAllChildren(pid, sig, krc, flags);
+        wxKillAllChildren(pid, sig, krc);
 
     // get the process handle to operate on
     DWORD dwAccess = PROCESS_QUERY_INFORMATION | SYNCHRONIZE;
@@ -800,7 +800,7 @@ bool wxMSWActivatePID(long pid)
 }
 
 // By John Skiff
-int wxKillAllChildren(long pid, wxSignal sig, wxKillError *krc, int flags)
+int wxKillAllChildren(long pid, wxSignal sig, wxKillError *krc)
 {
     if (krc)
         *krc = wxKILL_OK;
@@ -830,7 +830,7 @@ int wxKillAllChildren(long pid, wxSignal sig, wxKillError *krc, int flags)
 
     do {
         if (pe.th32ParentProcessID == (DWORD) pid) {
-            if (wxKill(pe.th32ProcessID, sig, krc, flags))
+            if (wxKill(pe.th32ProcessID, sig, krc))
                 return -1;
         }
     } while (::Process32Next (hProcessSnap, &pe));
@@ -1100,7 +1100,6 @@ int wxIsWindowsServer()
 static const int WINDOWS_SERVER2016_BUILD = 14393;
 static const int WINDOWS_SERVER2019_BUILD = 17763;
 static const int WINDOWS_SERVER2022_BUILD = 20348;
-static const int WINDOWS_SERVER2025_BUILD = 26100;
 
 // Windows 11 uses the same version as Windows 10 but its build numbers start
 // from 22000, which provides a way to test for it.
@@ -1182,9 +1181,6 @@ wxString wxGetOsDescription()
                                 break;
                             case WINDOWS_SERVER2022_BUILD:
                                 str = "Windows Server 2022";
-                                break;
-                            case WINDOWS_SERVER2025_BUILD:
-                                str = "Windows Server 2025";
                                 break;
                         }
                     }

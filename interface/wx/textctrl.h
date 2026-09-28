@@ -1906,8 +1906,8 @@ public:
     void OSXEnableNewLineReplacement(bool enable);
 
     /**
-        Enables the automatic replacement of straight (ASCII) quotation marks and
-        apostrophes with smart ("curly") quotes.
+        Enables the automatic replacement of ASCII quotation marks and
+        apostrophes with their typographic symbols.
 
         This feature is enabled by default.
 
@@ -1917,7 +1917,7 @@ public:
     void OSXEnableAutomaticQuoteSubstitution(bool enable);
 
     /**
-        Enables the automatic conversion of two ASCII hyphens into an em dash.
+        Enables the automatic conversion of two ASCII hyphens into an m-dash.
 
         This feature is enabled by default.
 

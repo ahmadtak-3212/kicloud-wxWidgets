@@ -3,7 +3,6 @@
 // Purpose:     wxListBox class declaration for the WASM DOM port
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/listbox.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef __WX_WASM_LISTBOX_H__
 #define __WX_WASM_LISTBOX_H__

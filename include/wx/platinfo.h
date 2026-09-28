@@ -57,7 +57,6 @@ enum wxOperatingSystemId
     // 1<<13 and 1<<14 available for other Unix flavours
 
     wxOS_DOS            = 1 << 15,      // obsolete
-    /* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/platinfo.h (W3.0P): wxPORT_WASM and wxOS_CHROME_OS ids and wxBrowserInfo (browser identification for the wasm port) */
     wxOS_OS2            = 1 << 16,      // obsolete
 
     wxOS_CHROME_OS      = 1 << 17       // Chrome OS
@@ -82,7 +81,6 @@ enum wxPortId
     wxPORT_OSX      = wxPORT_MAC,   // wxOSX, using Cocoa or iPhone API
     wxPORT_COCOA    = 1 << 8,       // wxCocoa, using Cocoa NextStep/Mac API
     wxPORT_WINCE    = 1 << 9,       // obsolete
-    /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
     wxPORT_QT       = 1 << 10,      // wxQT, using Qt 5+
     wxPORT_WASM     = 1 << 11       // wxWebAssembly, using wxUniversal
 };
@@ -120,7 +118,6 @@ const wxArchitecture
     wxARCH_64 = wxBITNESS_64,
     wxARCH_MAX = wxBITNESS_MAX;
 
-/* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
 // information about the browser (for WebAssembly)
 class wxBrowserInfo
 {
@@ -334,7 +331,6 @@ public:
         { return m_os; }
     wxLinuxDistributionInfo GetLinuxDistributionInfo() const
         { return m_ldi; }
-    /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
     wxBrowserInfo GetBrowserInfo() const
         { return m_browserInfo; }
     wxPortId GetPortId() const
@@ -420,7 +416,6 @@ public:
         { m_desktopEnv = de; }
     void SetLinuxDistributionInfo(const wxLinuxDistributionInfo& di)
         { m_ldi = di; }
-    /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
     void SetBrowserInfo(const wxBrowserInfo& browserInfo)
         { m_browserInfo = browserInfo; }
 
@@ -480,7 +475,6 @@ protected:
     wxString m_desktopEnv;
     wxLinuxDistributionInfo m_ldi;
 
-    /* KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file */
     // wxWebAssembly specific
     wxBrowserInfo m_browserInfo;
 

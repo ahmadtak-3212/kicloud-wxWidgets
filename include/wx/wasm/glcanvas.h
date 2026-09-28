@@ -6,7 +6,6 @@
 // Copyright:   (c) 2024
 // Licence:     wxWindows licence
 ///////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/glcanvas.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef _WX_WASM_GLCANVAS_H_
 #define _WX_WASM_GLCANVAS_H_

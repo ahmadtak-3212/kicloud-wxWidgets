@@ -199,8 +199,7 @@ TEST_CASE("ArgsValidation", "[wxString][vararg][error]")
 {
     int written;
     void *ptr = &written;
-    short int swritten = 0;
-    wxUnusedVar(swritten); // We're not really going to use it.
+    short int swritten;
 
     // these are valid:
     wxString::Format("a string(%s,%s), ptr %p, int %i",

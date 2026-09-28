@@ -76,11 +76,11 @@ set(wxINSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
 check_include_files("stdlib.h;stdarg.h;string.h;float.h" STDC_HEADERS)
 
-if(NOT WIN32 AND wxUSE_VISIBILITY)
-    check_cxx_compiler_flag(-fvisibility=hidden HAVE_VISIBILITY)
-else()
-    set(HAVE_VISIBILITY 0)
-endif()
+if(wxBUILD_SHARED)
+    if(wxUSE_VISIBILITY)
+        check_cxx_compiler_flag(-fvisibility=hidden HAVE_VISIBILITY)
+    endif()
+endif() # wxBUILD_SHARED
 
 if(MSVC)
     set(DISABLE_ALL_WARNINGS "/w")
@@ -461,7 +461,7 @@ if(UNIX)
         check_symbol_exists(inet_addr arpa/inet.h HAVE_INET_ADDR)
     endif(wxUSE_SOCKETS)
 
-    if(wxUSE_JOYSTICK AND WXGTK)
+    if(wxUSE_JOYSTICK AND NOT APPLE)
         check_include_files("linux/joystick.h" HAVE_JOYSTICK_H)
         if(NOT HAVE_JOYSTICK_H)
             message(WARNING "wxJoystick is not available")
@@ -629,7 +629,7 @@ check_include_file(wcstr.h HAVE_WCSTR_H)
 if(wxUSE_DATETIME)
     # check for timezone variable
     #   doesn't exist under Darwin / Mac OS X which uses tm_gmtoff instead
-    foreach(timezone_def _timezone __timezone timezone)
+    foreach(timezone_def timezone _timezone __timezone)
         wx_check_cxx_source_compiles("
             int tz;
             tz = ${timezone_def};"
@@ -672,20 +672,13 @@ if(wxUSE_FSWATCHER)
 endif()
 
 if(wxUSE_XLOCALE)
-    list(APPEND xlocale_headers locale.h stdlib.h)
     check_include_file(xlocale.h HAVE_XLOCALE_H)
+    set(CMAKE_EXTRA_INCLUDE_FILES locale.h)
     if(HAVE_XLOCALE_H)
-        list(APPEND xlocale_headers xlocale.h)
+        list(APPEND CMAKE_EXTRA_INCLUDE_FILES xlocale.h)
     endif()
-    wx_check_c_source_compiles("
-        locale_t t;
-        strtod_l(NULL, NULL, t);
-        strtol_l(NULL, NULL, 0, t);
-        strtoul_l(NULL, NULL, 0, t);
-"
-        HAVE_LOCALE_T
-        ${xlocale_headers}
-        )
+    check_type_size(locale_t LOCALE_T)
+    set(CMAKE_EXTRA_INCLUDE_FILES)
 endif()
 
 # Check sizes of various types

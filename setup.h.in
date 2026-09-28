@@ -17,15 +17,6 @@
 /* the installation location prefix from configure */
 #undef wxINSTALL_PREFIX
 
-/* Is .symver assembler directive supported? */
-#undef wxHAVE_ELF_SYMVER
-
-/* Are multiple versions of the same symbol supported? */
-#undef wxHAVE_ELF_SYMVER_MULTIPLE
-
-/* Prefix for the ELF version used for the library symbols. */
-#undef wxELF_VERSION_PREFIX
-
 /* Define if ssize_t type is available.  */
 #undef HAVE_SSIZE_T
 
@@ -556,6 +547,8 @@
 #define wxUSE_GLCANVAS       0
 
 #define wxUSE_GLCANVAS_EGL   0
+
+#define wxUSE_OPENGL_EMULATION 0
 
 #define wxUSE_RICHTEXT       0
 

@@ -29,7 +29,6 @@
 
 #include <stdio.h>
 #include <string.h>
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/msgdlgg.cpp (W3.0P): generic wxMessageDialog implements the asynchronous ShowModal(callback) overload
 #include <functional>
 
 #define __WX_COMPILING_MSGDLGG_CPP__ 1
@@ -277,7 +276,6 @@ int wxGenericMessageDialog::ShowModal()
     return wxMessageDialogBase::ShowModal();
 }
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 void wxGenericMessageDialog::ShowModal(std::function<void (int)> callback)
 {
     if ( !m_created )

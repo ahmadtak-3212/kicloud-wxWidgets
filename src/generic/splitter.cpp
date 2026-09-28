@@ -16,7 +16,6 @@
 
 #include "wx/splitter.h"
 
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/generic/splitter.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
 #ifdef __EMSCRIPTEN__
     #include "wx/wasm/elementtracker.h"
 #endif
@@ -815,7 +814,6 @@ void wxSplitterWindow::SizeWindows()
 
     wxClientDC dc(this);
     DrawSash(dc);
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 
 #ifdef __EMSCRIPTEN__
     // Update element registry with splitter sash position

@@ -33,21 +33,11 @@
     #include "wx/dynlib.h"
 #endif
 
-namespace
-{
-
 // global object
 // VERY IMPORTANT: do not use the default constructor since it would
 //                 try to init the wxPlatformInfo instance using
 //                 gs_platInfo itself!
-wxPlatformInfo gs_platInfo(wxPORT_UNKNOWN);
-
-#if wxUSE_THREADS
-// Critical section protecting gs_platInfo initialization.
-wxCriticalSection gs_csInit;
-#endif // wxUSE_THREADS
-
-} // anonymous namespace
+static wxPlatformInfo gs_platInfo(wxPORT_UNKNOWN);
 
 // ----------------------------------------------------------------------------
 // constants
@@ -80,9 +70,6 @@ static const wxChar* const wxOperatingSystemIdNames[] =
     wxT("Unknown"),
     wxT("Unknown"),
 
-    // KICLOUD: W3.0P: name of wxOS_CHROME_OS (1 << 17), added to
-    // include/wx/platinfo.h by pcbjam@8bad5f58e9 without a table entry.
-    wxT("Chrome OS"),
 };
 
 static const wxChar* const wxPortIdNames[] =
@@ -97,10 +84,7 @@ static const wxChar* const wxPortIdNames[] =
     wxT("wxMac"),
     wxT("wxCocoa"),
     wxT("Unknown"),
-    wxT("wxQT"),
-    // KICLOUD: W3.0P: name of wxPORT_WASM (1 << 11), added to
-    // include/wx/platinfo.h by pcbjam@8bad5f58e9 without a table entry.
-    wxT("wxWASM")
+    wxT("wxQT")
 };
 
 static const wxChar* const wxBitnessNames[] =
@@ -224,17 +208,23 @@ void wxPlatformInfo::InitForCurrentPlatform()
     m_ldi = wxGetLinuxDistributionInfo();
 #endif
     // else: leave m_ldi empty
+
+#ifdef __WXWASM__
+    m_browserInfo = wxGetBrowserInfo();
+#endif
+    // else: leave m_browserInfo empty
+
 }
 
 /* static */
 const wxPlatformInfo& wxPlatformInfo::Get()
 {
-#if wxUSE_THREADS
-    wxCriticalSectionLocker lockInit(gs_csInit);
-#endif // wxUSE_THREADS
-
-    if ( !gs_platInfo.m_initializedForCurrentPlatform )
+    static bool initialized = false;
+    if ( !initialized )
+    {
         gs_platInfo.InitForCurrentPlatform();
+        initialized = true;
+    }
 
     return gs_platInfo;
 }

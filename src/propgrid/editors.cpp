@@ -1414,15 +1414,7 @@ static void DrawSimpleCheckBox(wxWindow* win, wxDC& dc, const wxRect& rect, int 
 #endif
     }
 
-    // Ignore the specified height because the native renderer only draws
-    // checkboxes correctly when using its own preferred size in high DPI.
-    wxRendererNative::Get().DrawCheckBox
-    (
-        win,
-        dc,
-        wxRect(wxRendererNative::Get().GetCheckBoxSize(win)).CenterIn(rect),
-        cbFlags
-    );
+    wxRendererNative::Get().DrawCheckBox(win, dc, rect, cbFlags);
 #else
     wxUnusedVar(win);
 
@@ -1505,7 +1497,11 @@ public:
     void SetBoxHeight(int height)
     {
         m_boxHeight = height;
-        m_boxRect = GetBoxRect(GetClientSize(), m_boxHeight);
+        // Box rectangle
+        wxRect rect(GetClientSize());
+        rect.y += 1;
+        rect.width += 1;
+        m_boxRect = GetBoxRect(rect, m_boxHeight);
     }
 
     static wxRect GetBoxRect(const wxRect& r, int box_h)

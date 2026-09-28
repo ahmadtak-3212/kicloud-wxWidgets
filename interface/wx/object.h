@@ -5,7 +5,7 @@
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-/** @typedef wxObjectRefData
+/** @class wxObjectRefData
 
     This class is just a typedef to wxRefCounter and is used by wxObject.
 
@@ -581,8 +581,7 @@ public:
         Constructor.
 
         @a ptr is a pointer to the reference counted object to which this class points.
-        This object takes ownership of @a ptr, i.e.\ it will call T::DecRef()
-        on it if it is non-null when this object is destroyed or reset.
+        If @a ptr is not NULL @b T::IncRef() will be called on the object.
     */
     wxObjectDataPtr(T* ptr = NULL);
 

@@ -17,7 +17,6 @@
 
 // Split platforms into two groups - those which have well-working
 // double-buffering by default, and those which do not.
-/* KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/dcbuffer.h (W3.0P): wxWASM dispatch line(s): select the wasm port's class/header like the other ports */
 #if defined(__WXMAC__) || defined(__WXGTK20__) || defined(__WXDFB__) || defined(__WXQT__) || defined(__WXWASM__)
     #define wxALWAYS_NATIVE_DOUBLE_BUFFER       1
 #else

@@ -51,7 +51,6 @@
 #define __wxPG_SOURCE_FILE__
 
 #include "wx/propgrid/propgrid.h"
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/propgrid/propgrid.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
 
 #ifdef __EMSCRIPTEN__
     #include "wx/wasm/elementtracker.h"
@@ -1356,9 +1355,6 @@ void wxPropertyGrid::OnDPIChanged(wxDPIChangedEvent &event)
     CalculateFontAndBitmapStuff(m_vspacing);
     Refresh();
 
-    if ( wxPGProperty* const selected = GetSelection() )
-        RefreshProperty(selected);
-
     event.Skip();
 }
 
@@ -2068,7 +2064,6 @@ int wxPropertyGrid::DoDrawItems( wxDC& dc,
                                  const wxRect* itemsRect ) const
 #endif
 {
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #ifdef __EMSCRIPTEN__
     // Clear existing property grid elements before redrawing
     WasmUnregisterRenderedElementsByParent(const_cast<wxPropertyGrid*>(this));
@@ -2512,7 +2507,6 @@ int wxPropertyGrid::DoDrawItems( wxDC& dc,
         if ( fontChanged )
             dc.SetFont(normalFont);
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #ifdef __EMSCRIPTEN__
         // Register property row for element tracking
         const char* subType;

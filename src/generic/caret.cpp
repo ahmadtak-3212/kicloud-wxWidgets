@@ -229,8 +229,6 @@ void wxCaret::Blink()
 void wxCaret::Refresh()
 {
     wxClientDC dcWin(GetWindow());
-    GetWindow()->PrepareDC(dcWin);
-
     if (m_overlay.IsNative())
     {
         wxDCOverlay dcOverlay(m_overlay, &dcWin, m_x, m_y, m_width, m_height);

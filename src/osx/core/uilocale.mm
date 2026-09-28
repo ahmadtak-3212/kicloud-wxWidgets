@@ -250,9 +250,7 @@ wxUILocaleImplCF::DoGetMonthName(wxDateTime::Month month, wxDateTime::NameFlags 
     }
 
     NSString* monthName = [monthNames objectAtIndex:(month)];
-    wxCFStringRef cf(monthName);
-    [df release];
-    return cf.AsString();
+    return wxCFStringRef::AsString(monthName);
 }
 
 wxString
@@ -275,9 +273,7 @@ wxUILocaleImplCF::DoGetWeekDayName(wxDateTime::WeekDay weekday, wxDateTime::Name
     }
 
     NSString* weekdayName = [weekdayNames objectAtIndex:(weekday)];
-    wxCFStringRef cf(weekdayName);
-    [df release];
-    return cf.AsString();
+    return wxCFStringRef::AsString(weekdayName);
 }
 #endif // wxUSE_DATETIME
 

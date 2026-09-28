@@ -28,8 +28,6 @@
 
 #include "wx/scopedptr.h"
 
-#include "wx/private/elfversion.h"
-
 #include "wx/gtk/private/wrapgdk.h"
 #include "wx/gtk/private/backend.h"
 #ifdef GDK_WINDOWING_WAYLAND
@@ -54,10 +52,6 @@ WX_DECLARE_HASH_SET(wxGLCanvasEGL*, wxPointerHash, wxPointerEqual, wxGLCanvasSet
 
 // And use it to remember which objects already called eglSwapInterval().
 wxGLCanvasSet gs_alreadySetSwapInterval;
-
-// EGL version initialized by InitConfig().
-EGLint gs_eglMajor = 0;
-EGLint gs_eglMinor = 0;
 
 } // anonymous namespace
 
@@ -479,20 +473,6 @@ void wxEGLUpdatePosition(wxGLCanvasEGL* win)
     wl_subsurface_set_position(win->m_wlSubsurface, x, y);
 }
 
-// Helper declared as friend in the header and so can access member variables.
-//
-// Used when size or scale factor changes
-void wxEGLUpdateGeometry(GtkWidget* widget, wxGLCanvasEGL* win)
-{
-    int scale = gtk_widget_get_scale_factor(widget);
-    wl_egl_window_resize(win->m_wlEGLWindow, win->m_width * scale,
-                         win->m_height * scale, 0, 0);
-
-    wxEGLUpdatePosition(win);
-
-    wl_surface_set_buffer_scale(win->m_wlSurface, scale);
-}
-
 extern "C"
 {
 
@@ -548,77 +528,15 @@ static void gtk_glcanvas_size_callback(GtkWidget *widget,
                                        GtkAllocation *,
                                        wxGLCanvasEGL *win)
 {
-    wxEGLUpdateGeometry(widget, win);
-}
+    int scale = gtk_widget_get_scale_factor(widget);
+    wl_egl_window_resize(win->m_wlEGLWindow, win->m_width * scale,
+                         win->m_height * scale, 0, 0);
 
-static void gtk_glcanvas_scale_factor_notify(GtkWidget* widget,
-                                             GParamSpec*,
-                                             wxGLCanvasEGL *win)
-{
-    wxEGLUpdateGeometry(widget, win);
+    wxEGLUpdatePosition(win);
 }
 
 } // extern "C"
 #endif // GDK_WINDOWING_WAYLAND
-
-EGLSurface
-wxGLCanvasEGL::DoCallCreatePlatformWindowSurface(wxUIntPtr windowID,
-                                                 void* windowPtr) const
-{
-    // Type of eglCreatePlatformWindowSurface[EXT]().
-    typedef EGLSurface (*CreatePlatformWindowSurface)(EGLDisplay display,
-                                                      EGLConfig config,
-                                                      void* window,
-                                                      EGLAttrib const* attrib_list);
-
-    if ( gs_eglMajor > 1 || (gs_eglMajor == 1 && gs_eglMinor >= 5) )
-    {
-        // EGL 1.5 or later: use eglCreatePlatformWindowSurface() which must be
-        // available.
-        static CreatePlatformWindowSurface s_eglCreatePlatformWindowSurface = NULL;
-        if ( !s_eglCreatePlatformWindowSurface )
-        {
-            s_eglCreatePlatformWindowSurface = reinterpret_cast<CreatePlatformWindowSurface>(
-                eglGetProcAddress("eglCreatePlatformWindowSurface"));
-        }
-
-        // This check is normally superfluous but avoid crashing just in case
-        // it isn't.
-        if ( s_eglCreatePlatformWindowSurface )
-        {
-            return s_eglCreatePlatformWindowSurface(m_display, *m_config,
-                                                    windowPtr,
-                                                    NULL);
-        }
-    }
-
-    // Try loading the appropriate EGL function on first use.
-    static CreatePlatformWindowSurface s_eglCreatePlatformWindowSurfaceEXT = NULL;
-    static bool s_extFuncInitialized = false;
-    if ( !s_extFuncInitialized )
-    {
-        s_extFuncInitialized = true;
-
-        if ( IsExtensionSupported("EGL_EXT_platform_base") )
-        {
-            s_eglCreatePlatformWindowSurfaceEXT = reinterpret_cast<CreatePlatformWindowSurface>(
-                eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT"));
-        }
-    }
-
-    if ( s_eglCreatePlatformWindowSurfaceEXT )
-    {
-        return s_eglCreatePlatformWindowSurfaceEXT(m_display, *m_config,
-                                                   windowPtr,
-                                                   NULL);
-    }
-    else
-    {
-        return eglCreateWindowSurface(m_display, *m_config,
-                                      reinterpret_cast<EGLNativeWindowType>(windowID),
-                                      NULL);
-    }
-}
 
 bool wxGLCanvasEGL::CreateSurface()
 {
@@ -635,12 +553,13 @@ bool wxGLCanvasEGL::CreateSurface()
     {
         if ( m_surface != EGL_NO_SURFACE )
         {
-            eglDestroySurface(m_display, m_surface);
+            eglDestroySurface(m_surface, m_display);
             m_surface = EGL_NO_SURFACE;
         }
 
         m_xwindow = GDK_WINDOW_XID(window);
-        m_surface = CallCreatePlatformWindowSurface(m_xwindow);
+        m_surface = eglCreatePlatformWindowSurface(m_display, *m_config,
+                                                   &m_xwindow, NULL);
     }
 #endif
 #ifdef GDK_WINDOWING_WAYLAND
@@ -671,7 +590,8 @@ bool wxGLCanvasEGL::CreateSurface()
         wl_surface_set_buffer_scale(m_wlSurface, scale);
         m_wlEGLWindow = wl_egl_window_create(m_wlSurface, w * scale,
                                              h * scale);
-        m_surface = CallCreatePlatformWindowSurface(m_wlEGLWindow);
+        m_surface = eglCreatePlatformWindowSurface(m_display, *m_config,
+                                                   m_wlEGLWindow, NULL);
 
         // We need to use "map-event" instead of "map" to ensure that the
         // widget's underlying Wayland surface has been created.
@@ -684,17 +604,8 @@ bool wxGLCanvasEGL::CreateSurface()
         // Not unmapping the canvas as soon as possible causes problems when reparenting
         g_signal_connect(m_widget, "unmap",
                          G_CALLBACK(gtk_glcanvas_unmap_callback), this);
-
-        // We connect to "size-allocate" to update the position of the
-        // subsurface when the toplevel window is moved, which also updates the
-        // scale as a side effect, but we need to also separately connect to
-        // "notify::scale-factor" to catch scale changes, which is especially
-        // important initially, as we don't get a "size-allocate" with the
-        // correct scale when the window is created.
         g_signal_connect(m_widget, "size-allocate",
                          G_CALLBACK(gtk_glcanvas_size_callback), this);
-        g_signal_connect(m_widget, "notify::scale-factor",
-                         G_CALLBACK (gtk_glcanvas_scale_factor_notify), this);
     }
 #endif
 
@@ -711,7 +622,7 @@ wxGLCanvasEGL::~wxGLCanvasEGL()
 {
     if ( m_config && m_config != ms_glEGLConfig )
         delete m_config;
-    if ( m_surface != EGL_NO_SURFACE )
+    if ( m_surface )
         eglDestroySurface(m_display, m_surface);
 #ifdef GDK_WINDOWING_WAYLAND
     DestroyWaylandSubsurface();
@@ -722,7 +633,6 @@ wxGLCanvasEGL::~wxGLCanvasEGL()
     gs_alreadySetSwapInterval.erase(this);
 }
 
-wxELF_VERSION_COMPAT("_ZN13wxGLCanvasEGL23CreateWaylandSubsurfaceEv", "3.2.3")
 void wxGLCanvasEGL::CreateWaylandSubsurface()
 {
 #ifdef GDK_WINDOWING_WAYLAND
@@ -761,7 +671,6 @@ void wxGLCanvasEGL::CreateWaylandSubsurface()
 #endif
 }
 
-wxELF_VERSION_COMPAT("_ZN13wxGLCanvasEGL24DestroyWaylandSubsurfaceEv", "3.2.3")
 void wxGLCanvasEGL::DestroyWaylandSubsurface()
 {
 #ifdef GDK_WINDOWING_WAYLAND
@@ -800,20 +709,22 @@ EGLConfig *wxGLCanvasEGL::InitConfig(const wxGLAttributes& dispAttrs)
         return NULL;
     }
 
-    if ( !eglInitialize(dpy, &gs_eglMajor, &gs_eglMinor) )
+    EGLint eglMajor = 0;
+    EGLint eglMinor = 0;
+    if ( !eglInitialize(dpy, &eglMajor, &eglMinor) )
     {
         wxFAIL_MSG("eglInitialize failed");
         return NULL;
     }
 
     // The runtime EGL version cannot be known until EGL has been initialized.
-    if ( gs_eglMajor < 1 || (gs_eglMajor == 1 && gs_eglMinor < 4) )
+    if ( eglMajor < 1 || (eglMajor == 1 && eglMinor < 5) )
     {
         // Ignore the return value here, we cannot recover at this point.
         eglTerminate(dpy);
         wxLogError(wxString::Format(
-            "EGL version is %d.%d. EGL version 1.4 or greater is required.",
-            gs_eglMajor, gs_eglMinor));
+            "EGL version is %d.%d. EGL version 1.5 or greater is required.",
+            eglMajor, eglMinor));
         return NULL;
     }
 

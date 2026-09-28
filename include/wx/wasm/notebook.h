@@ -4,7 +4,6 @@
 //              (real <button role=tab> elements) above the page area.
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/notebook.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef __WX_WASM_NOTEBOOK_H__
 #define __WX_WASM_NOTEBOOK_H__

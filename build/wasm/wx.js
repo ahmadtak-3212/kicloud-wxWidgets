@@ -1,8 +1,3 @@
-// KICLOUD: adapted from pcbjam@8bad5f58e9:build/wasm/wx.js (W3.0P, moved from build/wasm/wx.js; kicloud/docs/provenance.md)
-// KICLOUD: W3.0P (TODO.md W3.0P ABI bullet): this --pre-js file calls the glue's in-scope
-// KICLOUD: runtime names (ccall, HEAP8, HEAPU8, HEAP32) instead of Module.<name>: PCBJam's
-// KICLOUD: -sEXPORTED_RUNTIME_METHODS link setting is gone; src/wasm/app.cpp declares them
-// KICLOUD: with EM_JS_DEPS, so every program that links wxApp gets them.
 // Element Registry for E2E Tests
 // Tracks all wxWindow instances with their positions for automated testing
 (function() {
@@ -838,8 +833,8 @@ if (typeof navigator !== 'undefined') {
 
     var flushMove = function () {
       rafPending = false;
-      if (typeof ccall === 'function') {
-        ccall('wx_window_move', null,
+      if (typeof Module !== 'undefined' && Module.ccall) {
+        Module.ccall('wx_window_move', null,
                      ['number', 'number', 'number'], [id, pendingX, pendingY]);
       }
     };
@@ -891,8 +886,8 @@ if (typeof navigator !== 'undefined') {
     });
     closeBtn.addEventListener('click', function (ev) {
       ev.stopPropagation();
-      if (typeof ccall === 'function') {
-        ccall('wx_window_close', null, ['number'], [id], { async: true });
+      if (typeof Module !== 'undefined' && Module.ccall) {
+        Module.ccall('wx_window_close', null, ['number'], [id], { async: true });
       }
     });
   };
@@ -941,8 +936,8 @@ if (typeof navigator !== 'undefined') {
 
     var flushResize = function () {
       rafPending = false;
-      if (pending && typeof ccall === 'function') {
-        ccall('wx_window_resize', null,
+      if (pending && typeof Module !== 'undefined' && Module.ccall) {
+        Module.ccall('wx_window_resize', null,
                      ['number', 'number', 'number', 'number', 'number'],
                      [id, pending.x, pending.y, pending.w, pending.h]);
       }
@@ -1251,12 +1246,12 @@ if (typeof navigator !== 'undefined') {
     bitmap.imageData = imageData;
     bitmap.imageBitmap = null;
 
-    HEAPU8.set(imageData.data, data);
+    Module.HEAPU8.set(imageData.data, data);
   };
 
   var setBitmapData = function (id, width, height, data, scaleFactor) {
     var size = 4 * width * height;
-    var array = new Uint8ClampedArray(HEAPU8.buffer, data, size);
+    var array = new Uint8ClampedArray(Module.HEAPU8.buffer, data, size);
     var imageData = new ImageData(width, height);  
     imageData.data.set(array);
 
@@ -1660,7 +1655,7 @@ if (typeof navigator !== 'undefined') {
     ctx.dashCount = dashCount;
     var dashes = [];
     for (var i = 0; i < dashCount; i++) {
-      dashes.push(HEAP8[dashPtr + i]);
+      dashes.push(Module.HEAP8[dashPtr + i]);
     }
     ctx.setLineDash(dashes);
   };
@@ -1711,10 +1706,10 @@ if (typeof navigator !== 'undefined') {
     // Read rectangle data from WASM memory (4 ints per rect: x, y, w, h)
     for (var i = 0; i < rectCount; i++) {
       var offset = rectDataPtr / 4 + i * 4;  // Convert byte offset to int offset
-      var x = HEAP32[offset];
-      var y = HEAP32[offset + 1];
-      var w = HEAP32[offset + 2];
-      var h = HEAP32[offset + 3];
+      var x = Module.HEAP32[offset];
+      var y = Module.HEAP32[offset + 1];
+      var w = Module.HEAP32[offset + 2];
+      var h = Module.HEAP32[offset + 3];
       ctx.rect(x, y, w, h);
     }
 
@@ -1864,15 +1859,15 @@ if (typeof navigator !== 'undefined') {
 
     if (n > 0) {
       var index = ptr >> 2;
-      var x = HEAP32[index++];
-      var y = HEAP32[index++];
+      var x = Module.HEAP32[index++];
+      var y = Module.HEAP32[index++];
 
       ctx.beginPath();
       ctx.moveTo(x, y);
 
       for (var i = 1; i < n; i++) {
-        x = HEAP32[index++]; 
-        y = HEAP32[index++];
+        x = Module.HEAP32[index++]; 
+        y = Module.HEAP32[index++];
         ctx.lineTo(x, y);
       }
 
@@ -1885,15 +1880,15 @@ if (typeof navigator !== 'undefined') {
 
     if (n > 0) {
       var index = ptr >> 2;
-      var x = HEAP32[index++];
-      var y = HEAP32[index++];
+      var x = Module.HEAP32[index++];
+      var y = Module.HEAP32[index++];
 
       ctx.beginPath();
       ctx.moveTo(x, y);
 
       for (var i = 1; i < n; i++) {
-        x = HEAP32[index++]; 
-        y = HEAP32[index++];
+        x = Module.HEAP32[index++]; 
+        y = Module.HEAP32[index++];
         ctx.lineTo(x, y);
       }
 
@@ -2137,7 +2132,7 @@ if (typeof navigator !== 'undefined') {
   var downloadFile = function (filename, size, data) {
     var link = document.createElement('a');
 
-    var sharedArray = new Uint8Array(HEAPU8.buffer, data, size);
+    var sharedArray = new Uint8Array(Module.HEAPU8.buffer, data, size);
     // Blob fails when passed SharedArrayBuffer
     var array = new Uint8Array(sharedArray);
     var blob = new Blob([array], {type: 'application/octet-stream'});

@@ -5,7 +5,6 @@
 // Copyright:   (c) 2022 Adam Hilss
 // Licence:     LGPL v2
 /////////////////////////////////////////////////////////////////////////////
-// KICLOUD: adapted from pcbjam@8bad5f58e9:include/wx/wasm/cursor.h (W3.0P; kicloud/docs/provenance.md)
 
 #ifndef _WX_WASM_CURSOR_H_
 #define _WX_WASM_CURSOR_H_

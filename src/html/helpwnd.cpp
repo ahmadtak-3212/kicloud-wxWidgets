@@ -1068,6 +1068,7 @@ void wxHtmlHelpWindow::RefreshLists()
 void wxHtmlHelpWindow::ReadCustomization(wxConfigBase *cfg, const wxString& path)
 {
     wxString oldpath;
+    wxString tmp;
 
     if (!path.empty())
     {
@@ -1125,6 +1126,7 @@ void wxHtmlHelpWindow::ReadCustomization(wxConfigBase *cfg, const wxString& path
 void wxHtmlHelpWindow::WriteCustomization(wxConfigBase *cfg, const wxString& path)
 {
     wxString oldpath;
+    wxString tmp;
 
     if (!path.empty())
     {

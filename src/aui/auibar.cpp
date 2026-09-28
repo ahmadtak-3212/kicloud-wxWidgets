@@ -24,9 +24,7 @@
 
 #include "wx/statline.h"
 #include "wx/dcbuffer.h"
-#include "wx/frame.h"
 #include "wx/sizer.h"
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/aui/auibar.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
 
 #ifdef __EMSCRIPTEN__
     #include "wx/wasm/elementtracker.h"
@@ -1466,16 +1464,6 @@ bool wxAuiToolBar::SetFont(const wxFont& font)
 
 void wxAuiToolBar::SetHoverItem(wxAuiToolBarItem* pitem)
 {
-    if ( wxFrame* frame = wxDynamicCast(wxGetTopLevelParent(this), wxFrame) )
-    {
-        wxString help;
-        if (pitem)
-        {
-            help = pitem->GetLongHelp();
-        }
-        frame->DoGiveHelp(help, pitem);
-    }
-
     if (pitem && (pitem->m_state & wxAUI_BUTTON_STATE_DISABLED))
         pitem = NULL;
 
@@ -2522,7 +2510,6 @@ void wxAuiToolBar::OnPaint(wxPaintEvent& WXUNUSED(evt))
         wxRect dropDownRect = GetOverflowRect();
         m_art->DrawOverflowButton(dc, this, dropDownRect, m_overflowState);
     }
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 
 #ifdef __EMSCRIPTEN__
     // Update element registry with toolbar tools (for E2E test automation).
@@ -2571,6 +2558,8 @@ void wxAuiToolBar::OnEraseBackground(wxEraseEvent& WXUNUSED(evt))
 
 void wxAuiToolBar::OnLeftDown(wxMouseEvent& evt)
 {
+    wxRect cli_rect(wxPoint(0,0), GetClientSize());
+
     if (m_gripperSizerItem)
     {
         wxRect gripper_rect = m_gripperSizerItem->GetRect();
@@ -2766,6 +2755,8 @@ void wxAuiToolBar::OnRightDown(wxMouseEvent& evt)
     if (HasCapture())
         return;
 
+    wxRect cli_rect(wxPoint(0,0), GetClientSize());
+
     if (m_gripperSizerItem)
     {
         wxRect gripper_rect = m_gripperSizerItem->GetRect();
@@ -2773,10 +2764,16 @@ void wxAuiToolBar::OnRightDown(wxMouseEvent& evt)
             return;
     }
 
-    if (m_overflowSizerItem && m_overflowVisible && m_art)
+    if (m_overflowSizerItem && m_art)
     {
-        if (GetOverflowRect().Contains(evt.GetX(), evt.GetY()))
+        int overflowSize = m_art->GetElementSize(wxAUI_TBART_OVERFLOW_SIZE);
+        if (overflowSize > 0 &&
+            evt.m_x > cli_rect.width - overflowSize &&
+            evt.m_y >= 0 &&
+            evt.m_y < cli_rect.height)
+        {
             return;
+        }
     }
 
     m_actionPos = wxPoint(evt.GetX(), evt.GetY());
@@ -2830,6 +2827,8 @@ void wxAuiToolBar::OnMiddleDown(wxMouseEvent& evt)
     if (HasCapture())
         return;
 
+    wxRect cli_rect(wxPoint(0,0), GetClientSize());
+
     if (m_gripperSizerItem)
     {
         wxRect gripper_rect = m_gripperSizerItem->GetRect();
@@ -2837,10 +2836,16 @@ void wxAuiToolBar::OnMiddleDown(wxMouseEvent& evt)
             return;
     }
 
-    if (m_overflowSizerItem && m_overflowVisible && m_art)
+    if (m_overflowSizerItem && m_art)
     {
-        if (GetOverflowRect().Contains(evt.GetX(), evt.GetY()))
+        int overflowSize = m_art->GetElementSize(wxAUI_TBART_OVERFLOW_SIZE);
+        if (overflowSize > 0 &&
+            evt.m_x > cli_rect.width - overflowSize &&
+            evt.m_y >= 0 &&
+            evt.m_y < cli_rect.height)
+        {
             return;
+        }
     }
 
     m_actionPos = wxPoint(evt.GetX(), evt.GetY());

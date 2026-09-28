@@ -28,7 +28,6 @@
 
 #include "wx/renderer.h"
 #include "wx/aui/auibook.h"
-// KICLOUD: adapted from pcbjam@8bad5f58e9:src/aui/tabart.cpp (W3.0P): wasm test element registry (wx/wasm/elementtracker.h): owner-drawn items report their rects so browser tests can find and click them
 
 #ifdef __EMSCRIPTEN__
     #include "wx/wasm/elementtracker.h"
@@ -287,11 +286,9 @@ void wxAuiGenericTabArt::DrawBorder(wxDC& dc, wxWindow* wnd, const wxRect& rect)
 }
 
 void wxAuiGenericTabArt::DrawBackground(wxDC& dc,
-                                        // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
                                         wxWindow* wnd,
                                         const wxRect& rect)
 {
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #ifdef __EMSCRIPTEN__
     // Unregister previous tab elements before redrawing
     if (wnd)
@@ -393,7 +390,6 @@ void wxAuiGenericTabArt::DrawTab(wxDC& dc,
     wxCoord tab_x = in_rect.x;
     wxCoord tab_y = in_rect.y + in_rect.height - tab_height;
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #ifdef __EMSCRIPTEN__
     // Register AUI tab for element tracking
     if (wnd)
@@ -1056,11 +1052,9 @@ void wxAuiSimpleTabArt::DrawBorder(wxDC& dc, wxWindow* wnd, const wxRect& rect)
 }
 
 void wxAuiSimpleTabArt::DrawBackground(wxDC& dc,
-                                       // KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
                                        wxWindow* wnd,
                                        const wxRect& rect)
 {
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #ifdef __EMSCRIPTEN__
     // Unregister previous tab elements before redrawing
     if (wnd)
@@ -1124,7 +1118,6 @@ void wxAuiSimpleTabArt::DrawTab(wxDC& dc,
     wxCoord tab_x = in_rect.x;
     wxCoord tab_y = in_rect.y + in_rect.height - tab_height;
 
-// KICLOUD: W3.0P (pcbjam@8bad5f58e9); same change as the first KICLOUD: marker in this file
 #ifdef __EMSCRIPTEN__
     // Register AUI tab for element tracking
     if (wnd)
