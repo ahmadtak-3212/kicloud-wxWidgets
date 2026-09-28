@@ -63,6 +63,13 @@ private:
     // Always kept the same size as the item cache.
     wxArrayInt m_itemsChecked;
 
+protected:
+    // KICLOUD: the DOM rows are checkboxes: every rebuild re-applies the checks
+    // (the base re-applied the all-zero selection onto them, clearing every check
+    // KiCad set, e.g. the Plot dialog's layer list) (B1.7).
+    virtual void WasmSyncSelection() wxOVERRIDE;
+    virtual bool WasmDomShowsSelection() const wxOVERRIDE { return false; }
+
     wxDECLARE_DYNAMIC_CLASS(wxCheckListBox);
 };
 

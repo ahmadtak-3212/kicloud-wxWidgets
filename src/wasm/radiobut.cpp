@@ -79,6 +79,11 @@ bool wxRadioButton::Create(wxWindow *parent,
         // every radio group on the page into one. See menu.cpp for the same trap.
         wxDomSetGroupName(WasmGetDomId(),
                           wxString::Format(wxT("wxrb-%zu"), (wxUIntPtr)groupStart));
+
+        // KICLOUD: the first button of a group starts checked, as in wxGTK and
+        // wxMSW; KiCad relies on it (the drill dialog's Excellon format) (B1.7).
+        if (groupStart == this && !HasFlag(wxRB_SINGLE))
+            SetValue(true);
     }
 
     return true;

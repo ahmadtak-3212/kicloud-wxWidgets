@@ -126,8 +126,9 @@ bool wxListBox::IsSelected(int n) const
 
     // The user can change the selection directly in the browser, so the
     // live <select> state is the truth when DOM-backed (the cache is
-    // refreshed on every CHANGE event).
-    if (WasmGetDomId())
+    // refreshed on every CHANGE event). KICLOUD: not for a checklist, whose
+    // DOM rows hold the checks (B1.7).
+    if (WasmGetDomId() && WasmDomShowsSelection())
     {
         wxArrayInt selections;
         wxParseSelectedIndices(wxDomGetSelectedIndices(WasmGetDomId()),
@@ -143,7 +144,7 @@ int wxListBox::GetSelections(wxArrayInt& aSelections) const
     aSelections.clear();
 
     // See IsSelected(): live state wins when DOM-backed.
-    if (WasmGetDomId())
+    if (WasmGetDomId() && WasmDomShowsSelection())
     {
         wxParseSelectedIndices(wxDomGetSelectedIndices(WasmGetDomId()),
                                aSelections);
@@ -184,7 +185,7 @@ void wxListBox::SetString(unsigned int n, const wxString& s)
 int wxListBox::GetSelection() const
 {
     // See IsSelected(): live state wins when DOM-backed.
-    if (WasmGetDomId())
+    if (WasmGetDomId() && WasmDomShowsSelection())
     {
         wxArrayInt selections;
         wxParseSelectedIndices(wxDomGetSelectedIndices(WasmGetDomId()),

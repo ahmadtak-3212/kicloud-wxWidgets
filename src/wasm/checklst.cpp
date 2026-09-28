@@ -120,6 +120,15 @@ void wxCheckListBox::OnDomEvent(wxDomEventKind kind)
     wxListBox::OnDomEvent(kind);
 }
 
+void wxCheckListBox::WasmSyncSelection()
+{
+    if (!WasmGetDomId())
+        return;
+
+    for (size_t i = 0; i < m_itemsChecked.size(); ++i)
+        wxDomSetItemSelected(WasmGetDomId(), i, m_itemsChecked[i] != 0);
+}
+
 int wxCheckListBox::DoInsertOneItem(const wxString& item, unsigned int pos)
 {
     m_itemsChecked.Insert(0, pos);
@@ -129,17 +138,19 @@ int wxCheckListBox::DoInsertOneItem(const wxString& item, unsigned int pos)
 
 void wxCheckListBox::DoDeleteOneItem(unsigned int pos)
 {
-    wxListBox::DoDeleteOneItem(pos);
-
+    // KICLOUD: update the checks first: the base rebuilds the DOM rows and
+    // re-applies them straight away (B1.7).
     if (pos < m_itemsChecked.size())
         m_itemsChecked.RemoveAt(pos);
+
+    wxListBox::DoDeleteOneItem(pos);
 }
 
 void wxCheckListBox::DoClear()
 {
-    wxListBox::DoClear();
+    m_itemsChecked.Clear();    // KICLOUD: before the base syncs (B1.7)
 
-    m_itemsChecked.Clear();
+    wxListBox::DoClear();
 }
 
 #endif // wxUSE_CHECKLISTBOX

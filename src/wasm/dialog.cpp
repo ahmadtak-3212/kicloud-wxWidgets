@@ -207,13 +207,13 @@ int wxDialog::ShowModal()
         return GetReturnCode();
     }
 
-    // Use the app's top level window as parent if none given unless explicitly
-    // forbidden
-    wxWindow * const parent = GetParentForModalDialog();
-    if ( parent && parent != this )
-    {
-        m_parent = parent;
-    }
+    // KICLOUD: do not reassign m_parent to GetParentForModalDialog() here (the
+    // other ports never do). The dialog stays in its creator's child list, so
+    // pointing m_parent elsewhere made ~wxWindowBase remove it from the wrong
+    // list: the creator kept a dangling child and the next idle pass crashed
+    // (KiCad's Set Hotkey dialog, parented to the hotkey list: "function
+    // signature mismatch" in wxWindowBase::SendIdleEvents). See docs/patches.md
+    // (B1.7).
 
     // The modal is a registered WAIT begun BEFORE Show(true) — an EndModal
     // running synchronously inside Show() resolves the wait early and

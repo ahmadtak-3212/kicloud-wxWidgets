@@ -140,6 +140,11 @@ void wxChoice::SetString(unsigned int n, const wxString& s)
 
 void wxChoice::SetSelection(int n)
 {
+    // KICLOUD: an index outside the items (e.g. 0 on an empty choice) means no
+    // selection, as in the other ports; it must not follow later inserts (B1.7).
+    if (n < 0 || n >= static_cast<int>(GetCount()))
+        n = wxNOT_FOUND;
+
     m_selection = n;
 
     if (WasmGetDomId())

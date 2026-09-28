@@ -90,10 +90,18 @@ protected:
     wxArrayPtrVoid m_itemsClientData;
     wxArrayInt     m_itemsSelected;
 
+    // KICLOUD: push the cached per-row state to the DOM rows. For a plain list
+    // box that is the selection; wxCheckListBox overrides it to push the checked
+    // states, since its DOM rows are checkboxes (B1.7).
+    virtual void WasmSyncSelection();
+
+    // KICLOUD: whether the DOM rows show the selection (true for a list box). A
+    // checklist's rows show checks, so its selection lives in the cache (B1.7).
+    virtual bool WasmDomShowsSelection() const { return true; }
+
 private:
-    // Push the whole cached item list (+ selection) to the DOM <select>.
+    // Push the whole cached item list (+ row state) to the DOM element.
     void WasmSyncItems();
-    void WasmSyncSelection();
 
     wxDECLARE_DYNAMIC_CLASS(wxListBox);
 };

@@ -245,4 +245,16 @@ void wxTextCtrl::ShowPosition(long WXUNUSED(pos))
     // TODO(dom-phase-2): scroll the DOM element to make the position visible.
 }
 
+
+// KICLOUD: see textctrl.h (B1.7). The <input> adds its padding and border to the
+// text; the height is floored to a font-derived line, as wxChoice does.
+wxSize wxTextCtrl::DoGetSizeFromTextSize(int xlen, int ylen) const
+{
+    const int lineHeight = GetCharHeight() + 8;
+    wxSize size(xlen > 0 ? xlen + 10 : -1, lineHeight);
+    if (ylen > 0 && ylen + 8 > size.y)
+        size.y = ylen + 8;
+    return size;
+}
+
 #endif // wxUSE_TEXTCTRL

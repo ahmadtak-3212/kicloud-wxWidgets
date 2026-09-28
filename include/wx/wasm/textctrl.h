@@ -46,6 +46,10 @@ public:
     virtual void OnDomEvent(wxDomEventKind kind) wxOVERRIDE;
 
 protected:
+    // KICLOUD: the size of a control showing text of this size (wxSpinCtrl and
+    // GetSizeFromText() callers collapsed to 0 height without it) (B1.7).
+    virtual wxSize DoGetSizeFromTextSize(int xlen, int ylen = -1) const wxOVERRIDE;
+
     // setting the value programmatically resets the modified flag
     // and pushes the new value into the DOM element
     virtual void DoSetValue(const wxString& value, int flags = 0) wxOVERRIDE;

@@ -34,6 +34,7 @@ extern "C" void wxWasmRunOnDispatchContext(void (*fn)(void *), void *arg);
 #include "wx/wasm/private/timer.h"
 
 #include <emscripten.h>
+#include <locale.h>
 #include <deque>
 #include <string>
 #include <emscripten/html5.h>
@@ -54,6 +55,14 @@ wxApp::wxApp()
       m_parkedMotionQueued(false)
 {
     printf("Creating app\n");
+
+    // KICLOUD: text is UTF-8 in the browser. The C library starts in the "C" locale,
+    // where wide formatting of any non-ASCII character fails (vswprintf returns -1), so
+    // wxString::Format/Printf returned an empty string for text such as "100µF" and
+    // KiCad dropped or blanked it in its outputs. Only the character type changes;
+    // LC_NUMERIC stays "C". See docs/patches.md (B1.7).
+    setlocale(LC_CTYPE, "C.UTF-8");
+
     RegisterEmscriptenCallbacks(this);
 }
 

@@ -1533,6 +1533,13 @@
     }
 
     var clone = el.cloneNode(true); // copies inline styles incl. font
+    // KICLOUD: a checked radio added to the document unchecks the other radios of
+    // its group, i.e. the real control being measured: measure an ungrouped clone
+    // (radio boxes and buttons lost the selection KiCad set) (B1.7).
+    if (clone.matches && clone.matches('input[type=radio]')) clone.removeAttribute('name');
+    Array.prototype.forEach.call(clone.querySelectorAll('input[type=radio]'), function (r) {
+      r.removeAttribute('name');
+    });
     clone.style.display = el.dataset.wxDisplay || 'block';
     clone.style.position = 'static';
     clone.style.width = 'auto';
