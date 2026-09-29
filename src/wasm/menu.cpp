@@ -405,6 +405,17 @@ void wxMenuBar::OnDomEvent(wxDomEventKind kind)
             if (checkable)
                 item->Toggle();
 
+            // KICLOUD: B1.7 section 1 (Place-menu clicks reached the canvas): the native ports
+            // send wxEVT_MENU_HIGHLIGHT while the pointer is over a row, so the chosen item
+            // was highlighted just before its wxEVT_MENU. KiCad's ACTION_MENU relies on that
+            // to tell a menubar choice (no cursor position) from a hotkey command (the cursor
+            // position): without it, Place > Draw Buses started the bus under the menu item.
+            if (menu)
+            {
+                wxMenuEvent highlight(wxEVT_MENU_HIGHLIGHT, id, menu);
+                wxMenuBase::ProcessMenuEvent(menu, highlight, menu->GetWindow());
+            }
+
             if (menu)
                 menu->SendEvent(id, checkable ? item->IsChecked() : -1);
 

@@ -921,11 +921,25 @@ bool wxWindowWasm::DoPopupMenu(wxMenu *menu, int x, int y)
     // rest of the UI), so zero the dispatch interlock for that whole span
     // (manual save/restore: wxWasmDispatchRestore centralizes the
     // erased-guard reporting).
+    // KICLOUD: B1.7 section 1: the native ports send wxEVT_MENU_OPEN when a popup menu is
+    // shown and wxEVT_MENU_CLOSE when it goes away (wxGTK's "show"/"hide" callbacks).
+    // KiCad's ACTION_MENU records the cursor position on the open event and gives it to the
+    // chosen context-menu command; without it, context-menu commands got position (0,0).
+    {
+        wxMenuEvent open(wxEVT_MENU_OPEN, wxID_ANY, menu);
+        wxMenuBase::ProcessMenuEvent(menu, open, this);
+    }
+
     const int savedDispatchDepth = wxWasmDispatchDepth;
     wxWasmDispatchDepth = 0;
     const int chosenId =
         wxDomPopupMenuModal(json.utf8_str(), WasmGetDomId(), vx, vy);
     wxWasmDispatchRestore(savedDispatchDepth, "PopupMenu");
+
+    {
+        wxMenuEvent close(wxEVT_MENU_CLOSE, wxID_ANY, menu);
+        wxMenuBase::ProcessMenuEvent(menu, close, this);
+    }
 
     if ( chosenId < 0 )
         return false; // cancelled
