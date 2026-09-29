@@ -26,6 +26,9 @@
 	path = 3rdparty/pcre
 	url = https://github.com/wxWidgets/pcre
 	branch = wx
+	# KICLOUD: the wasm build (kicloud scripts/engine/build-wx-wasm.sh) runs autoreconf in this
+	# directory, regenerating its autotools files in place; don't report that as local changes.
+	ignore = dirty
 [submodule "3rdparty/nanosvg"]
 	path = 3rdparty/nanosvg
 	url = https://github.com/wxWidgets/nanosvg
