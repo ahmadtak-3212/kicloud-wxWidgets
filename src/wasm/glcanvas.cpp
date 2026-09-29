@@ -16,6 +16,7 @@
 #if wxUSE_GLCANVAS
 
 #include "wx/glcanvas.h"
+#include "wx/toplevel.h"     // KICLOUD: B1.6d
 
 #ifndef WX_PRECOMP
     #include "wx/log.h"
@@ -396,6 +397,15 @@ bool wxGLCanvas::Create(wxWindow *parent,
     m_cssId = EM_ASM_INT({
         return createGLCanvas(true);
     });
+
+    // KICLOUD: a GL canvas of the main frame or of a page frame (an editor tab, B1.6d) stacks
+    // just above its window, below floating windows and dialogs; one of any other top-level
+    // window (the 3D viewer) stays above everything, as createGLCanvas decides for it
+    wxTopLevelWindow* tlw = wxDynamicCast(wxGetTopLevelParent(this), wxTopLevelWindow);
+    if (tlw && (tlw->IsMainFrame() || tlw->IsPageFrame()))
+    {
+        EM_ASM({ setGLCanvasZ($0, 100); }, m_cssId);
+    }
 
     // Position the GL canvas element to match this window's screen position
     wxPoint screenPos = GetScreenPosition();

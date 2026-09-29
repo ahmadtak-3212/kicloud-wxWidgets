@@ -9,6 +9,9 @@
 #ifndef _WX_WASM_TOPLEVEL_H_
 #define _WX_WASM_TOPLEVEL_H_
 
+#include "wx/vector.h"      // KICLOUD: page frames (B1.6d)
+#include "wx/weakref.h"
+
 //-----------------------------------------------------------------------------
 // wxTopLevelWindowWasm
 //-----------------------------------------------------------------------------
@@ -46,7 +49,8 @@ public:
     // implement base class pure virtuals
     virtual void Maximize(bool WXUNUSED(maximize) = true) wxOVERRIDE { }
     virtual bool IsMaximized() const wxOVERRIDE { return false; }
-    virtual bool IsAlwaysMaximized() const wxOVERRIDE { return IsMainFrame(); }
+    // KICLOUD: a page frame always fills the page, like the main frame (B1.6d)
+    virtual bool IsAlwaysMaximized() const wxOVERRIDE { return IsMainFrame() || IsPageFrame(); }
     virtual void Iconize(bool WXUNUSED(iconize) = true) wxOVERRIDE { }
     virtual bool IsIconized() const wxOVERRIDE { return false; }
     virtual void Restore() wxOVERRIDE { }
@@ -63,8 +67,13 @@ public:
     virtual wxString GetTitle() const wxOVERRIDE { return m_title; }
 
     virtual wxString GetCSSClassList() const wxOVERRIDE {
-      return wxNonOwnedWindow::GetCSSClassList() + " toplevel";
+      return wxNonOwnedWindow::GetCSSClassList() + " toplevel" + (IsPageFrame() ? " page" : "");
     }
+
+    // KICLOUD: page frames (wx/wasm/pageframes.h, B1.6d)
+    bool IsPageFrame() const { return !m_pageKey.empty(); }
+    const wxString& GetPageKey() const { return m_pageKey; }
+    virtual bool Show(bool show = true) wxOVERRIDE;
 
 protected:
     virtual void DoGetClientSize(int *width, int *height) const wxOVERRIDE;
@@ -104,6 +113,11 @@ private:
 
     bool m_isActive;
     wxString m_title;
+    // KICLOUD: the page frame key (empty: not a page frame), and the non-modal top-level
+    // windows of this page frame that were hidden with it (B1.6d)
+    wxString m_pageKey;
+    wxVector<wxWeakRef<wxWindow> > m_hiddenWithPage;
+    void NotifyPage(const char* event) const;
 
     wxRect m_minimizeButtonRect;
 

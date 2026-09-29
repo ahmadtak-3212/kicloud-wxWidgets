@@ -16,6 +16,9 @@
 
 #include "wx/wasm/private.h"
 #include "wx/wasm/private/display.h"
+#include "wx/wasm/pageframes.h"     // KICLOUD: B1.6d
+#include "wx/dialog.h"
+#include "wx/weakref.h"
 
 #include <emscripten.h>
 #include <emscripten/html5.h>
@@ -38,6 +41,28 @@ wxBEGIN_EVENT_TABLE(wxTopLevelWindowWasm, wxTopLevelWindowBase)
     EVT_MOTION(wxTopLevelWindowWasm::OnMotion)
 wxEND_EVENT_TABLE()
 
+// KICLOUD: page frames (wx/wasm/pageframes.h, docs/patches.md B1.6d)
+static wxString gs_nextPageFrame;
+static int gs_pageFramesEnabled = -1;
+
+bool wxWasmPageFramesEnabled()
+{
+    if (gs_pageFramesEnabled < 0)
+    {
+        gs_pageFramesEnabled = EM_ASM_INT({
+            return (typeof Module !== 'undefined' && Module.wxPageFrames) ? 1 : 0;
+        });
+    }
+
+    return gs_pageFramesEnabled == 1;
+}
+
+void wxWasmSetNextPageFrame(const char* key)
+{
+    gs_nextPageFrame = (key && *key && wxWasmPageFramesEnabled()) ? wxString::FromUTF8(key)
+                                                                   : wxString();
+}
+
 bool wxTopLevelWindowWasm::Create(wxWindow *parent,
                                   wxWindowID id,
                                   const wxString& title,
@@ -50,6 +75,19 @@ bool wxTopLevelWindowWasm::Create(wxWindow *parent,
     // before passing to base class. This ensures GetClientSize() returns
     // reasonable values even before Show() is called.
     wxSize size(sizeOrig);
+
+    // KICLOUD: the first top-level window created after wxWasmSetNextPageFrame() is that page
+    // frame: it fills the page (B1.6d)
+    m_pageKey = gs_nextPageFrame;
+    gs_nextPageFrame.clear();
+    wxPoint position(pos);
+
+    if (IsPageFrame() && wxTheApp && wxTheApp->GetDisplay())
+    {
+        size = wxTheApp->GetDisplay()->GetScreenSize();
+        position = wxPoint(0, 0);
+    }
+
     if (!size.IsFullySpecified())
     {
         // Query display size directly from wxTheApp if available.
@@ -63,7 +101,7 @@ bool wxTopLevelWindowWasm::Create(wxWindow *parent,
         size.SetDefaults(defaultSize);
     }
 
-    if (!wxTopLevelWindowBase::Create(parent, id, pos, size, style, name))
+    if (!wxTopLevelWindowBase::Create(parent, id, position, size, style, name))
     {
         wxFAIL_MSG(wxT("wxTopLevelWindowWasm creation failed"));
         return false;
@@ -127,12 +165,137 @@ wxTopLevelWindowWasm::~wxTopLevelWindowWasm()
             }
         });
     }
+
+    // KICLOUD: a page frame closed: the page closes its tab (B1.6d)
+    if (IsPageFrame())
+        NotifyPage("closed");
+}
+
+// KICLOUD: a GL canvas is a DOM element of its own (not inside its window's element), shown
+// by wxGLCanvas::Show from IsShownOnScreen(). Re-sync every GL canvas in `win`'s tree after its
+// top-level window was shown or hidden. wxGLCanvas is found by name, as in
+// wxWasmWindowHostsGLCanvas, so core does not link against the GL library (B1.6d).
+static void wxWasmSyncGLCanvases(wxWindow* win, const wxClassInfo* cls)
+{
+    if (!win || !cls)
+        return;
+
+    if (win->IsKindOf(cls))
+        win->Show(win->IsShown());
+
+    for (wxWindowList::compatibility_iterator node = win->GetChildren().GetFirst(); node;
+         node = node->GetNext())
+    {
+        wxWasmSyncGLCanvases(node->GetData(), cls);
+    }
+}
+
+// KICLOUD: tell the page about a page frame (wx/wasm/pageframes.h, B1.6d)
+void wxTopLevelWindowWasm::NotifyPage(const char* event) const
+{
+    EM_ASM({
+        if (typeof window !== 'undefined' && typeof window.wxWasmPageFrame === 'function')
+            window.wxWasmPageFrame(UTF8ToString($0), UTF8ToString($1), UTF8ToString($2));
+    }, event, static_cast<const char *>(m_pageKey.utf8_str()),
+       static_cast<const char *>(m_title.utf8_str()));
+}
+
+// KICLOUD: page frames are shown one at a time (B1.6d). Showing one fills the page with it,
+// hides the page frame that was shown (with its non-modal top-level windows), and makes it the
+// application's top window, which the browser's resize, focus and file drops go to.
+bool wxTopLevelWindowWasm::Show(bool show)
+{
+    if (!IsPageFrame() || show == IsShown())
+        return base_type::Show(show);
+
+    if (show)
+    {
+        for (wxWindowList::compatibility_iterator node = wxTopLevelWindows.GetFirst(); node;
+             node = node->GetNext())
+        {
+            wxTopLevelWindow* other = wxDynamicCast(node->GetData(), wxTopLevelWindow);
+
+            if (other && other != this && other->IsPageFrame() && other->IsShown())
+                other->Show(false);
+        }
+
+        if (wxTheApp && wxTheApp->GetDisplay())
+        {
+            const wxSize screen = wxTheApp->GetDisplay()->GetScreenSize();
+            SetSize(0, 0, screen.x, screen.y);
+        }
+    }
+    else
+    {
+        m_hiddenWithPage.clear();
+
+        for (wxWindowList::compatibility_iterator node = wxTopLevelWindows.GetFirst(); node;
+             node = node->GetNext())
+        {
+            wxWindow* tlw = node->GetData();
+            wxDialog* dialog = wxDynamicCast(tlw, wxDialog);
+
+            if (tlw != this && tlw->IsShown() && tlw->GetParent()
+                && tlw->GetParent()->GetTopLevelWindow() == this
+                && !(dialog && dialog->IsModal()))
+            {
+                m_hiddenWithPage.push_back(wxWeakRef<wxWindow>(tlw));
+            }
+        }
+
+        for (size_t i = 0; i < m_hiddenWithPage.size(); ++i)
+        {
+            if (m_hiddenWithPage[i])
+                m_hiddenWithPage[i]->Show(false);
+        }
+
+        wxActivateEvent deactivate(wxEVT_ACTIVATE, false, GetId());
+        deactivate.SetEventObject(this);
+        HandleWindowEvent(deactivate);
+    }
+
+    const bool changed = base_type::Show(show);
+
+    // The frame's GL canvases (the editor's board or schematic view) follow it
+    wxWasmSyncGLCanvases(this, wxClassInfo::FindClass(wxT("wxGLCanvas")));
+
+    if (show)
+    {
+        for (size_t i = 0; i < m_hiddenWithPage.size(); ++i)
+        {
+            if (m_hiddenWithPage[i])
+                m_hiddenWithPage[i]->Show(true);
+        }
+
+        m_hiddenWithPage.clear();
+
+        // A modal dialog stays above whichever page frame is shown
+        for (wxWindowList::compatibility_iterator node = wxTopLevelWindows.GetFirst(); node;
+             node = node->GetNext())
+        {
+            wxDialog* dialog = wxDynamicCast(node->GetData(), wxDialog);
+
+            if (dialog && dialog->IsModal() && dialog->IsShown())
+                dialog->Raise();
+        }
+
+        if (wxTheApp)
+            wxTheApp->SetTopWindow(this);
+
+        wxActivateEvent activate(wxEVT_ACTIVATE, true, GetId());
+        activate.SetEventObject(this);
+        HandleWindowEvent(activate);
+        NotifyPage("shown");
+    }
+
+    return changed;
 }
 
 bool wxTopLevelWindowWasm::HasTitleBar() const
 {
     // Main frame already has a native title bar.
-    return !IsMainFrame() && !(GetWindowStyle() & wxFRAME_NO_TASKBAR);
+    // KICLOUD: a page frame is a tab of the page and has none (B1.6d)
+    return !IsMainFrame() && !IsPageFrame() && !(GetWindowStyle() & wxFRAME_NO_TASKBAR);
 }
 
 bool wxTopLevelWindowWasm::UseDomTitleBar() const
@@ -242,6 +405,10 @@ bool wxTopLevelWindowWasm::IsFullScreen() const
 void wxTopLevelWindowWasm::SetTitle(const wxString &title)
 {
     m_title = title;
+
+    // KICLOUD: the page shows a page frame's title on its tab (B1.6d)
+    if (IsPageFrame())
+        NotifyPage("title");
 
     if (IsMainFrame())
     {

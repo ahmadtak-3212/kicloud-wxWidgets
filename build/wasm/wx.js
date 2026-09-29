@@ -1050,6 +1050,16 @@ if (typeof navigator !== 'undefined') {
   };
 
   var raiseWindow = function (id) {
+    // KICLOUD: a page frame (an editor tab, wx/wasm/pageframes.h) is the only one shown: it
+    // stays at the bottom of #window-container, under its GL canvases (z-index 100) and any
+    // floating window or dialog (B1.6d)
+    var raised = windowMap.get(id);
+    if (raised && raised.window && raised.window.classList && raised.window.classList.contains('page')) {
+      setWindowZIndex(id, 1);
+      recomputeModalBarrier();
+      return;
+    }
+
     var maxZ = 0;
 
     // Check z-index of all windows
@@ -1433,6 +1443,12 @@ if (typeof navigator !== 'undefined') {
     if (canvas.dataset.shouldBeVisible !== 'false') {
       canvas.style.display = 'block';
     }
+  };
+
+  // KICLOUD: a GL canvas's stacking, set by its window's kind (glcanvas.cpp, B1.6d)
+  var setGLCanvasZ = function (id, zIndex) {
+    var canvas = glCanvasMap.get(id);
+    if (canvas) canvas.style.zIndex = String(zIndex);
   };
 
   var setGLCanvasVisibility = function (id, isVisible) {

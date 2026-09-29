@@ -636,6 +636,17 @@ void wxApp::HandleSizeEvent(const wxSizeEvent &event)
         topWindow->SetSize(0, 0, newSize.GetWidth(), newSize.GetHeight());
         topWindow->Refresh();
     }
+
+    // KICLOUD: every window that fills the page follows it: the main frame and the page
+    // frames, shown or not (wx/wasm/pageframes.h, B1.6d)
+    for (wxWindowList::compatibility_iterator node = wxTopLevelWindows.GetFirst(); node;
+         node = node->GetNext())
+    {
+        wxTopLevelWindow* tlw = wxDynamicCast(node->GetData(), wxTopLevelWindow);
+
+        if (tlw && tlw != topWindow && tlw->IsAlwaysMaximized())
+            tlw->SetSize(0, 0, newSize.GetWidth(), newSize.GetHeight());
+    }
 }
 
 void wxApp::HandleActivateEvent(wxActivateEvent *event)
