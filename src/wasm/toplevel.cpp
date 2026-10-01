@@ -23,8 +23,7 @@
 #include <emscripten.h>
 #include <emscripten/html5.h>
 
-// KICLOUD: a roomier flat title bar for the editor's dialogs (B1.20; was 22)
-static const wxCoord TITLE_BAR_HEIGHT = 28;
+static const wxCoord TITLE_BAR_HEIGHT = 22;
 static const wxColour TITLE_BAR_BACKGROUND_COLOUR(200, 200, 200);
 static const wxColour TITLE_BAR_FOREGROUND_COLOUR(40, 40, 40);
 
