@@ -493,6 +493,22 @@ void wxWindowWasm::UpdateDomGeometryRecursive(const wxRect *ancestorClip)
     if ( !tlw )
         return;
 
+    // KICLOUD: B1.18: a wxGLCanvas draws into a GL canvas element of its own, placed at its
+    // window's absolute screen position (glcanvas.cpp, setGLCanvasRect), which it updates only
+    // in its own DoSetSize. An ancestor that moves without resizing it (a dialog laid out at
+    // (0, 0) and then centred by Show, a dragged dialog) left that element behind: KiCad's
+    // symbol chooser drew its preview over the dialog's title and search field. Re-sync the
+    // element from here, the walk every ancestor move already takes: a no-op SetSize reaches
+    // wxGLCanvas::DoSetSize (its rect), Show(IsShown()) its visibility. wxGLCanvas is found by
+    // name, as in wxWasmWindowHostsGLCanvas, so core does not link against the GL library.
+    static const wxClassInfo *const glCanvasClass = wxClassInfo::FindClass(wxT("wxGLCanvas"));
+    if ( glCanvasClass && IsKindOf(glCanvasClass) )
+    {
+        Show(IsShown());
+        SetSize(wxDefaultCoord, wxDefaultCoord, wxDefaultCoord, wxDefaultCoord,
+                wxSIZE_USE_EXISTING);
+    }
+
     // GetScreenPosition() is the CLIENT-AREA origin (ClientToScreen(0,0)),
     // which equals the top-left corner only while GetClientAreaOrigin() is
     // (0,0). The element box needs the top-left: without the correction a
