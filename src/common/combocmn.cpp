@@ -981,6 +981,10 @@ void wxComboCtrlBase::OnThemeChange()
     if ( !m_hasFgCol )
     {
         SetOwnForegroundColour(vattrs.colFg);
+        // KICLOUD: B1.20, SetOwnForegroundColour() marks the colour as the application's own, so
+        // the next theme change kept the first theme's text colour (dark text on the dark
+        // theme's fields after a live switch). The colour set here is the theme's default.
+        m_hasFgCol = false;
     }
     if ( !HasTransparentBackground() )
     {
