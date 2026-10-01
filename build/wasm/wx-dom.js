@@ -26,37 +26,40 @@
   // !important rules override them live when the embedding page toggles its
   // theme class — no per-element re-styling, and light mode is untouched.
   // Keep the palette aligned with the wx wasm system-colour table
-  // (src/wasm/settings.cpp): face #2d2d3e, window #1e1e2c, text #e4e4ee.
+  // (src/wasm/settings.cpp).
+  // KICLOUD: the warm dark of the editor's theme (B1.20): surface #2a2723, panel #221f1c,
+  // text #f3efe8, lines #4a453e, accent #4263eb (was a cool blue-grey). A page can restyle
+  // further with a stylesheet of its own (kicloud's is web/live/theme/editor-chrome.css).
   (function injectDarkThemeStyles() {
     var css =
       'html.dark [data-wx-menu-bar="1"],' +
-      'html.dark [data-wx-tool-bar="1"]{background:#2d2d3e !important;}' +
-      'html.dark [data-wx-menu-bar="1"] .wx-menu-title{color:#e4e4ee !important;}' +
-      'html.dark .wx-menu-popup{background:#2d2d3e !important;' +
-        'border-color:#121220 !important;color:#e4e4ee !important;}' +
-      'html.dark [data-wx-check-list="1"]{background:#1e1e2c !important;' +
-        'border-color:#121220 !important;color:#e4e4ee !important;}' +
-      'html.dark .wx-tab-strip{background:#2d2d3e !important;' +
-        'border-bottom-color:#121220 !important;}' +
-      'html.dark .wx-tab-strip button{background:#23233a !important;' +
-        'color:#e4e4ee !important;border-color:#121220 !important;}' +
+      'html.dark [data-wx-tool-bar="1"]{background:#221f1c !important;}' +
+      'html.dark [data-wx-menu-bar="1"] .wx-menu-title{color:#f3efe8 !important;}' +
+      'html.dark .wx-menu-popup{background:#2a2723 !important;' +
+        'border-color:#4a453e !important;color:#f3efe8 !important;}' +
+      'html.dark [data-wx-check-list="1"]{background:#2a2723 !important;' +
+        'border-color:#4a453e !important;color:#f3efe8 !important;}' +
+      'html.dark .wx-tab-strip{background:#2a2723 !important;' +
+        'border-bottom-color:#4a453e !important;}' +
+      'html.dark .wx-tab-strip button{background:#221f1c !important;' +
+        'color:#f3efe8 !important;border-color:#4a453e !important;}' +
       'html.dark .wx-tab-strip button[aria-selected="true"]' +
-        '{background:#3a3a54 !important;}' +
-      'html.dark #wx-tooltip{background:#2d2d3e !important;' +
-        'color:#e4e4ee !important;border-color:#5a5a72 !important;}' +
-      'html.dark .wx-tool{color:#e4e4ee !important;}' +
-      'html.dark .wx-tool[data-wx-toggled="1"]{background:#3d6ae0 !important;}' +
-      'html.dark [data-wx-scrollbar="1"]{background:#23233a !important;}' +
-      'html.dark [data-wx-scrollbar="1"] .wx-sb-thumb{background:#4a4a62 !important;' +
-        'border-color:#5a5a72 !important;}' +
+        '{background:#36322d !important;}' +
+      'html.dark #wx-tooltip{background:#2a2723 !important;' +
+        'color:#f3efe8 !important;border-color:#4a453e !important;}' +
+      'html.dark .wx-tool{color:#f3efe8 !important;}' +
+      'html.dark .wx-tool[data-wx-toggled="1"]{background:#262c4a !important;}' +
+      'html.dark [data-wx-scrollbar="1"]{background:#221f1c !important;}' +
+      'html.dark [data-wx-scrollbar="1"] .wx-sb-thumb{background:#4a453e !important;' +
+        'border-color:#4a453e !important;}' +
       // Native form controls (select/input/textarea .wx-dom-control): the page's
       // dark foreground bleeds into them while their native background stays
       // white — restyle both, and flip color-scheme so the dropdown list and
       // caret follow.
       'html.dark select.wx-dom-control,' +
       'html.dark input.wx-dom-control,' +
-      'html.dark textarea.wx-dom-control{background:#1e1e2c !important;' +
-        'color:#e4e4ee !important;border-color:#121220 !important;' +
+      'html.dark textarea.wx-dom-control{background:#2a2723 !important;' +
+        'color:#f3efe8 !important;border-color:#4a453e !important;' +
         'color-scheme:dark;}' +
       // checkbox/radio inputs are CHILDREN of a label.wx-dom-control, so the
       // rule above never reaches them; flip their color-scheme too.
@@ -1110,6 +1113,14 @@
     if (el && cssFont) el.style.font = cssFont;
   };
 
+  // KICLOUD: the dialog's default button (wxButton::SetDefault) is marked for the page's
+  // stylesheet (B1.20: the accent button), as native ports draw it differently.
+  window.wxDomSetDefault = function (domId, on) {
+    var el = controls.get(domId);
+    if (!el) return;
+    if (on) el.dataset.wxDefault = '1'; else delete el.dataset.wxDefault;
+  };
+
   window.wxDomSetAriaLabel = function (domId, label) {
     var el = controls.get(domId);
     if (el) el.setAttribute('aria-label', label);
@@ -1177,13 +1188,23 @@
     items.forEach(function (it, idx) {
       if (it.kind === 'separator') {
         var sep = document.createElement('div');
+        sep.className = 'wx-menu-sep'; // KICLOUD: styling hook (B1.20)
         sep.style.cssText = 'border-top:1px solid #808080;margin:2px 4px;';
         pop.appendChild(sep);
         return;
       }
       var row = document.createElement('div');
-      row.textContent = (it.checked ? '✓ ' : '   ') + it.label +
-                        (it.kind === 'submenu' ? '  ▸' : '');
+      // KICLOUD: styling hooks (B1.20): the row's class and state, and the check mark in a
+      // span of its own (the row's text is unchanged).
+      row.className = 'wx-menu-item';
+      row.dataset.wxKind = it.kind || 'normal';
+      if (!it.enabled) row.dataset.wxDisabled = '1';
+      var mark = document.createElement('span');
+      mark.className = 'wx-menu-check';
+      mark.textContent = it.checked ? '✓ ' : '   ';
+      row.appendChild(mark);
+      row.appendChild(document.createTextNode(it.label +
+                                              (it.kind === 'submenu' ? '  ▸' : '')));
       row.style.cssText = 'padding:2px 14px 2px 6px;cursor:default;' +
                           (it.enabled ? '' : 'color:#808080;');
       if (it.enabled) {
@@ -1403,6 +1424,7 @@
     tools.forEach(function (t, idx) {
       if (t.kind === 'separator') {
         var sep = document.createElement('div');
+        sep.className = 'wx-tool-sep'; // KICLOUD: styling hook (B1.20)
         sep.style.cssText =
           'border-left:1px solid #808080;align-self:stretch;margin:1px 3px;';
         el.appendChild(sep);

@@ -303,6 +303,12 @@ inline void wxDomSetFont(int domId, const wxString& cssFont)
     EM_ASM({ wxDomSetFont($0, UTF8ToString($1)); }, domId, (const char *)cssFont.utf8_str());
 }
 
+// KICLOUD: marks a dialog's default button for the page's stylesheet (B1.20).
+inline void wxDomSetDefault(int domId, bool on)
+{
+    EM_ASM({ if (typeof wxDomSetDefault === 'function') wxDomSetDefault($0, $1); }, domId, on ? 1 : 0);
+}
+
 inline void wxDomSetAriaLabel(int domId, const wxString& label)
 {
     EM_ASM({ wxDomSetAriaLabel($0, UTF8ToString($1)); }, domId, (const char *)label.utf8_str());

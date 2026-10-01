@@ -84,7 +84,14 @@ wxWindow *wxButton::SetDefault()
 {
     wxWindow *oldDefault = wxButtonBase::SetDefault();
 
-    // TODO(dom-phase-3): reflect default-button styling on the DOM element.
+    // KICLOUD: the default button is marked on its DOM element, which the page styles (B1.20).
+    if (wxButton* old = wxDynamicCast(oldDefault, wxButton))
+    {
+        if (old != this && old->WasmGetDomId())
+            wxDomSetDefault(old->WasmGetDomId(), false);
+    }
+    if (WasmGetDomId())
+        wxDomSetDefault(WasmGetDomId(), true);
 
     return oldDefault;
 }
