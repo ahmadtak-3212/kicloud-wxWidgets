@@ -63,8 +63,17 @@ bool wxBitmapButton::Create(wxWindow *parent,
     {
         const wxBitmap bmp = GetBitmapLabel();
         if (bmp.IsOk())
+        {
             wxDomSetImageDataURL(WasmGetDomId(), wxDomBitmapToDataURL(bmp),
                                  bmp.GetWidth(), bmp.GetHeight());
+
+            // KICLOUD: P3-I (docs/patches.md): the size set above was measured while the label
+            // had just dropped the <img>, so a default-sized bitmap button was as tall as its
+            // padding (KiCad's ERC pin conflicts map: 28x10 px buttons, rows overlapping their
+            // labels). Measure again with the image in place.
+            InvalidateBestSize();
+            SetInitialSize(size);
+        }
     }
 
     return true;
