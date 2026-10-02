@@ -109,7 +109,15 @@ void wxFrame::PositionMenuBar()
 void wxFrame::DetachMenuBar()
 {
     wxFrameBase::DetachMenuBar();
-    SendSizeEvent();
+    // KICLOUD: B1.20d, posted, not sent: wxFrameBase::SetMenuBar() replaces a menubar by a
+    // detach and an attach (KiCad rebuilds its menubar on every theme, language or hotkey
+    // change: EDA_BASE_FRAME::ReCreateMenuBar). A size event sent here grew the client area by a
+    // menubar height until the attach shrank it back, so the frame's children were laid out twice
+    // and KiCad's drawing area resized and redrew in full twice for nothing (3 full redraws of the
+    // board per light/dark switch instead of 1). Now the attach's size event lays the frame out
+    // once with the new bar in place; a menubar removed for good is laid out when the posted
+    // event arrives, and the posted event finds nothing to change after a replacement.
+    PostSizeEvent();
 }
 
 void wxFrame::AttachMenuBar(wxMenuBar *menubar)
