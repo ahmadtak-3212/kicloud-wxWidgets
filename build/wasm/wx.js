@@ -1695,6 +1695,13 @@ if (typeof navigator !== 'undefined') {
     ctx.strokeStyle = strokeStyle;
   };
 
+  // KICLOUD: P3-I the window context's own clip (its visible rect).
+  var clipToWindow = function (ctx) {
+    ctx.beginPath();
+    ctx.rect(0, 0, ctx.width, ctx.height);
+    ctx.clip();
+  };
+
   var clipRect = function (id, x, y, width, height) {
     //console.log('clipRect: ' + x + ' ' + y + ' ' + width + ' ' + height);
     var ctx = getContext(id);
@@ -1706,6 +1713,11 @@ if (typeof navigator !== 'undefined') {
     if (height < 0) height = 0;
 
     resetClip(ctx);
+    // KICLOUD: P3-I a DC clipping region narrows the window's own clip (the
+    // part of the window its ancestors leave visible) instead of replacing it;
+    // replacing it let a child scrolled out of its parent (a stackup colour
+    // combo below the grid) paint over its neighbours.
+    clipToWindow(ctx);
 
     ctx.beginPath();
     ctx.rect(x, y, width, height);
@@ -1716,6 +1728,7 @@ if (typeof navigator !== 'undefined') {
   var clipRegion = function (id, rectDataPtr, rectCount) {
     var ctx = getContext(id);
     resetClip(ctx);
+    clipToWindow(ctx); // KICLOUD: P3-I see clipRect
 
     ctx.beginPath();
 
