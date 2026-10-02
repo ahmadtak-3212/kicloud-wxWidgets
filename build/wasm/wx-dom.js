@@ -1153,6 +1153,7 @@
   // KICLOUD: P3-I (Travis's reports): the menubar title whose menu is open, so a click on another
   // title, or hovering it, switches menus at once as on the desktop
   var openMenuTitle = null;
+  var hoverOpened = null;   // KICLOUD: P3-I, the title whose menu a hover opened
 
   function closeMenuPopup() {
     var p = openMenuPopup;
@@ -1418,11 +1419,19 @@
       // KICLOUD: P3-I: one click switches from an open menu to this one, and hovering this title
       // while another menubar menu is open opens this one (desktop behaviour)
       btn.addEventListener('mouseenter', function () {
-        if (openMenuPopup && openMenuTitle && openMenuTitle !== btn && openMenuTitle.parentNode === btn.parentNode)
+        if (openMenuPopup && openMenuTitle && openMenuTitle !== btn && openMenuTitle.parentNode === btn.parentNode) {
           btn.click();
+          hoverOpened = btn;   // the click that usually follows the pointer keeps it open
+        }
       });
+      btn.addEventListener('mouseleave', function () { if (hoverOpened === btn) hoverOpened = null; });
       btn.addEventListener('click', function (ev) {
         ev.stopPropagation();
+        if (hoverOpened === btn && openMenuTitle === btn && ev.isTrusted) {
+          hoverOpened = null;
+          return;
+        }
+        hoverOpened = null;
         if (openMenuPopup && (openMenuTitle === btn || !openMenuTitle)) {
           closeMenuPopup();
         } else {
