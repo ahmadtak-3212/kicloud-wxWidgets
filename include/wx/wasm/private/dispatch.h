@@ -37,6 +37,23 @@ extern int wxWasmDispatchDepth;
 // must defer (queue/skip) instead of running handlers.
 inline bool wxWasmDispatchParked() { return wxWasmDispatchDepth > 0; }
 
+// KICLOUD: P3-I (docs/patches.md): keyboard and mouse-button events queued while a chain was
+// parked and not yet delivered. A DOM control event (a dialog's OK button, a text entry's
+// change) waits until this is zero: the queued keys of a text control must reach it before OK
+// reads its value and closes the dialog. wx delivers pending events one per handler per pass,
+// so a posted OK click overtook the keys still queued for the editor (KiCad's DRC rule editor
+// lost most of a rule typed just before OK).
+extern int wxWasmQueuedInput;
+
+// A token held by each queued input event: counts it while it exists (delivered or discarded)
+struct wxWasmQueuedInputToken
+{
+    wxWasmQueuedInputToken() { ++wxWasmQueuedInput; }
+    ~wxWasmQueuedInputToken() { --wxWasmQueuedInput; }
+    wxWasmQueuedInputToken(const wxWasmQueuedInputToken&) = delete;
+    wxWasmQueuedInputToken& operator=(const wxWasmQueuedInputToken&) = delete;
+};
+
 // Abandon every held chain: the count drops to zero and dispatch reopens.
 //
 // A chain that dies ABNORMALLY - a wasm trap, or a SuspendError from a wait

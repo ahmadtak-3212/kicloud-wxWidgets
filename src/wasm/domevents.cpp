@@ -19,6 +19,8 @@
 #include "wx/wasm/private/dispatch.h"
 #include "wx/wasm/private/dom.h"
 #include "wx/wasm/private/mouse.h"
+#include "wx/wasm/private/mailbox.h"   // KICLOUD: P3-I
+#include "wx/weakref.h"                // KICLOUD: P3-I
 
 #include <emscripten.h>
 #include <emscripten/html5.h>
@@ -85,6 +87,55 @@ wxString wxDomBitmapToDataURL(const wxBitmap& bitmap)
            wxBase64Encode(buf.GetData(), buf.GetDataLen());
 }
 
+// KICLOUD: P3-I: a DOM event deferred behind queued input (see wx_dom_event)
+namespace
+{
+struct wxDomDeferredEvent
+{
+    wxWeakRef<wxWindow> window;
+    int domId;
+    int kind;
+};
+
+void wxDomDeliverDeferred(void *arg)
+{
+    wxDomDeferredEvent *ev = static_cast<wxDomDeferredEvent *>(arg);
+
+    if ( !ev->window )
+    {
+        delete ev;
+        return;
+    }
+
+    // Still behind queued keys or clicks (or a chain parked again): try on a later tick
+    if ( wxWasmQueuedInput > 0 || wxWasmDispatchParked() )
+    {
+        wxWasmMailboxEnqueueAfter(wxDomDeliverDeferred, ev, 10);
+        return;
+    }
+
+    wxWindowWasm *window = ev->window.get();
+    const int domId = ev->domId;
+    const int kind = ev->kind;
+    delete ev;
+
+    if ( !window->IsEnabled() )
+        return;
+
+    wxWasmDispatchGuard dispatchGuard;
+    gs_currentEventDomId = domId;
+    window->OnDomEvent(static_cast<wxDomEventKind>(kind));
+    gs_currentEventDomId = 0;
+}
+} // namespace
+
+void wxDomQueueDomEvent(wxWindowWasm *window, int domId, int kind)
+{
+    wxWasmMailboxEnqueueAfter(wxDomDeliverDeferred,
+                              new wxDomDeferredEvent{ wxWeakRef<wxWindow>(static_cast<wxWindow *>(window)), domId, kind },
+                              0);
+}
+
 extern "C"
 {
 
@@ -101,18 +152,17 @@ void EMSCRIPTEN_KEEPALIVE wx_dom_event(int domId, int kind)
     if ( !window->IsEnabled() )
         return;
 
-    if ( wxWasmDispatchParked() )
+    if ( wxWasmDispatchParked() || wxWasmQueuedInput > 0 )
     {
         // Another dispatch chain is suspended mid-handler; defer this DOM
         // event to the first tick after resume instead of running handlers
-        // over its half-mutated widget state. CallAfter binds the deferred
-        // call to the window's event queue, so it dies with the window if
-        // that is destroyed first.
-        window->CallAfter([window, domId, kind]() {
-            gs_currentEventDomId = domId;
-            window->OnDomEvent(static_cast<wxDomEventKind>(kind));
-            gs_currentEventDomId = 0;
-        });
+        // over its half-mutated widget state.
+        // KICLOUD: P3-I (docs/patches.md): and behind every keyboard or mouse-button event
+        // queued before it (wxWasmQueuedInput): the deferred event goes through the scheduler
+        // mailbox and is delivered only once those are delivered. A posted CallAfter here was
+        // delivered after just one of the queued keys (one event per handler per pass), so a
+        // dialog's OK closed the dialog before the text typed into it arrived.
+        wxDomQueueDomEvent(window, domId, kind);
         return;
     }
 

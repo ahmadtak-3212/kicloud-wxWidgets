@@ -24,6 +24,10 @@
 #include "wx/private/eventloopsourcesmanager.h"
 #include "wx/wasm/private/dispatch.h"
 #include "wx/wasm/private/mailbox.h"
+
+#include <memory>   // KICLOUD: P3-I
+
+int wxWasmQueuedInput = 0;   // KICLOUD: P3-I, see wx/wasm/private/dispatch.h
 #include "wx/wasm/private/display.h"
 
 // Defined in evtloop.cpp: run work on an activation that may suspend — plain
@@ -252,7 +256,15 @@ bool wxApp::HandleKeyEvent(wxKeyEvent *event)
             // the follow-up KEY_DOWN (queued too, order preserved); other
             // types report "handled" so the browser default stays suppressed
             // and no duplicate CHAR is synthesized.
-            wxPostEvent(window->GetEventHandler(), *event);
+            // KICLOUD: P3-I: counted until delivered (wxWasmQueuedInput, dispatch.h)
+            {
+                std::shared_ptr<wxWasmQueuedInputToken> token(new wxWasmQueuedInputToken);
+                wxKeyEvent queued(*event);
+                window->CallAfter([window, queued, token]() mutable
+                {
+                    window->HandleWindowEvent(queued);
+                });
+            }
             return event->GetEventType() != wxEVT_CHAR_HOOK;
         }
 
@@ -377,7 +389,21 @@ void wxApp::HandleMouseEvent(wxMouseEvent *event)
                 queued.SetPosition(target->ScreenToClient(event->GetPosition()));
                 queued.SetEventObject(target);
                 queued.SetId(target->GetId());
-                wxPostEvent(target->GetEventHandler(), queued);
+
+                if (isMotion)
+                {
+                    wxPostEvent(target->GetEventHandler(), queued);
+                }
+                else
+                {
+                    // KICLOUD: P3-I: a queued button event is counted until delivered
+                    // (wxWasmQueuedInput, dispatch.h)
+                    std::shared_ptr<wxWasmQueuedInputToken> token(new wxWasmQueuedInputToken);
+                    target->CallAfter([target, queued, token]() mutable
+                    {
+                        target->HandleWindowEvent(queued);
+                    });
+                }
 
                 if (isMotion)
                     m_parkedMotionQueued = true;
