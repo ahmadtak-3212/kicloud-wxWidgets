@@ -192,10 +192,26 @@ wxFont wxSystemSettingsNative::GetFont(wxSystemFont WXUNUSED(index))
     return gs_fontDefault;
 }
 
-int wxSystemSettingsNative::GetMetric(wxSystemMetric WXUNUSED(index), const wxWindow* WXUNUSED(win))
+int wxSystemSettingsNative::GetMetric(wxSystemMetric index, const wxWindow* WXUNUSED(win))
 {
-    // TODO: implement
-    return 0;
+    // KICLOUD: P3-I (docs/patches.md): the pointer thresholds of a desktop (GTK's 8 px drag
+    // threshold, 500 ms double-click). With 0 here every 1 px jitter between a press and its
+    // release was a drag, so KiCad dropped the click: polygon and zone corners, selections.
+    switch ( index )
+    {
+        case wxSYS_DRAG_X:
+        case wxSYS_DRAG_Y:
+        case wxSYS_DCLICK_X:
+        case wxSYS_DCLICK_Y:
+            return 8;
+
+        case wxSYS_DCLICK_MSEC:
+            return 500;
+
+        default:
+            // TODO: implement
+            return 0;
+    }
 }
 
 bool wxSystemSettingsNative::HasFeature(wxSystemFeature index)
