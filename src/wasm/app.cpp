@@ -848,11 +848,30 @@ struct wxWasmDomJob
     wxApp *app = NULL;
     bool finished = false;
     bool abandoned = false;
+    // KICLOUD: P3-I: counted in wxWasmQueuedInput from submission until its body starts
+    bool queuedCount = false;
 };
+
+// KICLOUD: P3-I (docs/patches.md): a job's body has started: it no longer counts as queued
+// input (a job that then parks, e.g. a key that opened a modal, must not hold back the DOM
+// events of that modal)
+void wxWasmDomJobStarted(wxWasmDomJob *aJob)
+{
+    if (aJob->queuedCount)
+    {
+        aJob->queuedCount = false;
+        --wxWasmQueuedInput;
+    }
+}
 
 /** Run aJob via the scheduler; true if it completed before returning. */
 bool wxWasmRunDomJob(void (*aFn)(void *), wxWasmDomJob *aJob)
 {
+    // KICLOUD: P3-I: a key or mouse job waiting for the promising job tick is queued input:
+    // DOM control events (a dialog's OK) wait for it (wx_dom_event, wxWasmQueuedInput)
+    aJob->queuedCount = true;
+    ++wxWasmQueuedInput;
+
     wxWasmRunOnDispatchContext(aFn, aJob);
 
     if (aJob->finished)
@@ -884,6 +903,7 @@ struct wxWasmMouseJob : wxWasmDomJob
 void wxWasmRunMouseJob(void *arg)
 {
     wxWasmMouseJob *job = static_cast<wxWasmMouseJob *>(arg);
+    wxWasmDomJobStarted(job);   // KICLOUD: P3-I
 
     if (job->wheel)
     {
@@ -1074,6 +1094,7 @@ bool wxWasmNavigateByTab(const wxKeyEvent &event)
 void wxWasmRunKeyJob(void *arg)
 {
     wxWasmKeyJob *job = static_cast<wxWasmKeyJob *>(arg);
+    wxWasmDomJobStarted(job);   // KICLOUD: P3-I
     wxApp *app = job->app;
     wxKeyEvent &event = job->event;
 

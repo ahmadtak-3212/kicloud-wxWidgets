@@ -34,6 +34,8 @@ int wxWasmDispatchDepth = 0;
 void wxWasmDispatchAbandon()
 {
     wxWasmDispatchDepth = 0;
+    // KICLOUD: P3-I: input queued for a dead chain will never be delivered: let DOM events through
+    wxWasmQueuedInput = 0;
 }
 
 void wxWasmDispatchRestore(int saved, const char *site)
