@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////////
 // Name:        wx/wasm/pageframes.h
 // Purpose:     page frames: top-level frames that each fill the page, one at a time
-// Author:      kicloud contributors
-// Copyright:   (c) 2026 kicloud contributors
+// Author:      Ahmad Taka
+// Copyright:   (c) 2026 Ahmad Taka
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
