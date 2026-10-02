@@ -1158,6 +1158,16 @@
     }
   }
 
+  // KICLOUD: P3-I: Escape closes an open menubar menu, as on the desktop (the context menus
+  // already close on Escape); the key does not reach wx while it closes the menu
+  document.addEventListener('keydown', function (ev) {
+    if (openMenuPopup && ev.key === 'Escape') {
+      ev.stopPropagation();
+      ev.preventDefault();
+      closeMenuPopup();
+    }
+  }, true);
+
   document.addEventListener('mousedown', function (ev) {
     // any click outside an open menu closes it (mousedown so the click on
     // another control still lands)
