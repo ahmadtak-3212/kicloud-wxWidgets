@@ -39,6 +39,13 @@ void wxDomUnregisterWindow(int domId)
     gs_domWindows.erase(domId);
 }
 
+// KICLOUD: P3-I (docs/patches.md): the window of a DOM id, for wxWasmMenuItemsNow (menu.cpp)
+wxWindowWasm *wxDomFindWindowById(int domId)
+{
+    wxDomWindowMap::iterator it = gs_domWindows.find(domId);
+    return it == gs_domWindows.end() ? NULL : it->second;
+}
+
 // domId of the element whose event is currently being dispatched (see the
 // declaration in wx/wasm/private/dom.h). Lets a window owning auxiliary DOM
 // elements (built-in scrollbar gutters) discriminate which one fired.

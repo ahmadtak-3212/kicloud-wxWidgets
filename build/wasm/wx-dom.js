@@ -1394,7 +1394,16 @@
         if (openMenuPopup) {
           closeMenuPopup();
         } else {
-          showMenuPopup(domId, btn, m.items || [], domId + ':' + idx);
+          // KICLOUD: P3-I (docs/patches.md): the items as they are now (enabled state after the
+          // menu's update-UI handlers), not as they were when the menubar was built
+          var items = m.items || [];
+          try {
+            var now = Module['ccall']('wxWasmMenuItemsNow', 'string', ['number', 'number'], [domId, idx]);
+            if (now) items = JSON.parse(now);
+          } catch (e) {
+            console.warn('wxWasmMenuItemsNow: ' + (e && e.message || e));
+          }
+          showMenuPopup(domId, btn, items, domId + ':' + idx);
         }
       });
       el.appendChild(btn);

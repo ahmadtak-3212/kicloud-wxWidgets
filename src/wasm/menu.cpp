@@ -17,6 +17,8 @@
 
 #include "wx/wasm/private/dom.h"
 
+#include <emscripten.h>   // KICLOUD: P3-I, EMSCRIPTEN_KEEPALIVE
+
 #if wxUSE_MENUBAR
 
 // Refresh the DOM menubar (if any) that `menu` ultimately hangs off: a
@@ -264,6 +266,28 @@ void wxMenuBar::Detach()
         parent->RemoveChild(this);
 
     wxMenuBarBase::Detach();
+}
+
+// KICLOUD: P3-I (docs/patches.md): the menubar's DOM structure is pushed when the menus are
+// built, so an item enabled or disabled later (wxUpdateUIEvent: KiCad greys Undo, Delete, Save,
+// and every editing item in a read-only view) kept the state it was built with. When a menubar
+// menu is opened, the page asks for that menu's items as they are now: the menu's update-UI
+// handlers run first, as the native ports do on wxEVT_MENU_OPEN. Returns "" for an unknown bar.
+wxWindowWasm *wxDomFindWindowById(int domId);   // domevents.cpp
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char *wxWasmMenuItemsNow(int domId, int pos)
+{
+    static wxCharBuffer out;
+    out = wxCharBuffer("");
+
+    wxMenuBar *bar = wxDynamicCast(wxDomFindWindowById(domId), wxMenuBar);
+    if (!bar || pos < 0 || static_cast<size_t>(pos) >= bar->GetMenuCount())
+        return out.data();
+
+    wxMenu *menu = bar->GetMenu(pos);
+    menu->UpdateUI();
+    out = menu->WasmItemsToJson().utf8_str();
+    return out.data();
 }
 
 void wxMenuBar::WasmRebuildMenus()
