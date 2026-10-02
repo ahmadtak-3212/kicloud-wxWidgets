@@ -1150,13 +1150,26 @@
   // ========== Menus & toolbars ==========
 
   var openMenuPopup = null;
+  // KICLOUD: P3-I (Travis's reports): the menubar title whose menu is open, so a click on another
+  // title, or hovering it, switches menus at once as on the desktop
+  var openMenuTitle = null;
 
   function closeMenuPopup() {
-    if (openMenuPopup) {
-      openMenuPopup.remove();
-      openMenuPopup = null;
-    }
+    var p = openMenuPopup;
+    openMenuTitle = null;
+    if (!p) return;
+    openMenuPopup = null;
+    // KICLOUD: P3-I: a context menu is closed through its own settle (the C++ caller awaits it)
+    if (p.__wxSettle) { p.__wxSettle(-1); return; }
+    p.remove();
   }
+
+  // KICLOUD: P3-I: an open menu closes when the page loses focus or is hidden (another tab of the
+  // shell, another window), and on request from the page (window.wxDomCloseMenus, the shell's tab
+  // switch)
+  window.addEventListener('blur', function () { closeMenuPopup(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) closeMenuPopup(); });
+  window.wxDomCloseMenus = function () { closeMenuPopup(); };
 
   // KICLOUD: P3-I: Escape closes an open menubar menu, as on the desktop (the context menus
   // already close on Escape); the key does not reach wx while it closes the menu
@@ -1272,7 +1285,9 @@
       },
       function (row, subItems) {
         // simple inline expansion: replace popup with the submenu
+        var title = openMenuTitle;   // KICLOUD: P3-I, still the same menubar menu
         showMenuPopup(domId, row, subItems, registryParent);
+        openMenuTitle = title;
       });
 
     document.body.appendChild(pop);
@@ -1357,6 +1372,7 @@
       buildMenuItemRows(pop, items, 'popupmenu',
         function (id) { settle(id); }, makeReopen());
 
+      pop.__wxSettle = settle;   // KICLOUD: P3-I, closeMenuPopup() cancels it properly
       document.body.appendChild(pop);
       openMenuPopup = pop;
 
@@ -1399,9 +1415,15 @@
         'border:none;background:transparent;padding:2px 8px;margin:0;' +
         'font:inherit;white-space:pre;';
       btn.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+      // KICLOUD: P3-I: one click switches from an open menu to this one, and hovering this title
+      // while another menubar menu is open opens this one (desktop behaviour)
+      btn.addEventListener('mouseenter', function () {
+        if (openMenuPopup && openMenuTitle && openMenuTitle !== btn && openMenuTitle.parentNode === btn.parentNode)
+          btn.click();
+      });
       btn.addEventListener('click', function (ev) {
         ev.stopPropagation();
-        if (openMenuPopup) {
+        if (openMenuPopup && (openMenuTitle === btn || !openMenuTitle)) {
           closeMenuPopup();
         } else {
           // KICLOUD: P3-I (docs/patches.md): the items as they are now (enabled state after the
@@ -1414,6 +1436,7 @@
             console.warn('wxWasmMenuItemsNow: ' + (e && e.message || e));
           }
           showMenuPopup(domId, btn, items, domId + ':' + idx);
+          openMenuTitle = btn;
         }
       });
       el.appendChild(btn);
