@@ -1674,6 +1674,17 @@ void wxWindowWasm::DoSetSize(int x, int y,
         event.SetEventObject(this);
         HandleWindowEvent(event);
     }
+    else if (sizeFlags & wxSIZE_FORCE_EVENT)
+    {
+        // KICLOUD: P3-I (docs/patches.md): wxSIZE_FORCE_EVENT sends the size event even when the
+        // geometry is unchanged, as wxMSW and wxGTK do. wxSizer lays a child window out with it,
+        // and a window with a sizer of its own (a wxScrolledWindow) lays out its children from
+        // that event: KiCad's Physical Stackup page added rows to such a window and they stayed
+        // at (0, 0), over the grid's header.
+        wxSizeEvent event(wxSize(currentW, currentH), GetId());
+        event.SetEventObject(this);
+        HandleWindowEvent(event);
+    }
 }
 
 void wxWindowWasm::DoSetClientSize(int width, int height)
