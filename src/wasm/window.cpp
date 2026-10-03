@@ -1000,6 +1000,12 @@ bool wxWindowWasm::Create(wxWindow *parent,
     if (parent)
     {
         parent->AddChild(this);
+
+        // KICLOUD: P3-K a new child changes the parent's best size. The native ports get this
+        // from SetInitialSize() in every control's Create(); without it a parent that had been
+        // measured earlier (KiCad's lazy Preferences pages) kept its old, too small best size and
+        // its dialog was laid out too short (Preferences > Common overlapped and clipped).
+        parent->InvalidateBestSize();
     }
 
     int x = pos.x;

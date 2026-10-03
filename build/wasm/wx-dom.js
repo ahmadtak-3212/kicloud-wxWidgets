@@ -32,6 +32,9 @@
   // further with a stylesheet of its own (kicloud's is web/live/theme/editor-chrome.css).
   (function injectDarkThemeStyles() {
     var css =
+      // KICLOUD: P3-K the accelerator column of a menu row (not in the row's text)
+      '.wx-menu-item[data-wx-accel]::after{content:attr(data-wx-accel);margin-left:auto;' +
+        'padding-left:28px;opacity:.65;}' +
       'html.dark [data-wx-menu-bar="1"],' +
       'html.dark [data-wx-tool-bar="1"]{background:#221f1c !important;}' +
       'html.dark [data-wx-menu-bar="1"] .wx-menu-title{color:#f3efe8 !important;}' +
@@ -1229,7 +1232,14 @@
       row.appendChild(mark);
       row.appendChild(document.createTextNode(it.label +
                                               (it.kind === 'submenu' ? '  ▸' : '')));
-      row.style.cssText = 'padding:2px 14px 2px 6px;cursor:default;' +
+      // KICLOUD: P3-K the accelerator ("Ctrl+S"), right-aligned and muted as on desktop. It is
+      // drawn by a ::after (the wx-menu-item[data-wx-accel] rule below), so the row's text, which
+      // the specs match, stays the label.
+      if (it.accel) {
+        row.dataset.wxAccel = it.accel;
+        row.style.display = 'flex';
+      }
+      row.style.cssText += 'padding:2px 14px 2px 6px;cursor:default;' +
                           (it.enabled ? '' : 'color:#808080;');
       if (it.enabled) {
         row.addEventListener('mouseenter', function () {

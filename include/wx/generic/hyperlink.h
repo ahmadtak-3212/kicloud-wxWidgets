@@ -57,6 +57,9 @@ public:
     wxString GetURL() const wxOVERRIDE { return m_url; }
     void SetURL (const wxString &url) wxOVERRIDE { m_url=url; }
 
+    // KICLOUD: P3-K a label set after creation re-measures the control and lays its parent out
+    void SetLabel(const wxString& label) wxOVERRIDE;
+
     void SetVisited(bool visited = true) wxOVERRIDE { m_visited=visited; }
     bool GetVisited() const wxOVERRIDE { return m_visited; }
 

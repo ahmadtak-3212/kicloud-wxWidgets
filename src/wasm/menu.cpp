@@ -125,6 +125,16 @@ wxString wxMenu::WasmItemsToJson() const
         json += wxT("\"label\":\"");
         // no mnemonics/accelerators in the browser menus (yet)
         json += wxDomJsonEscape(item->GetItemLabelText());
+        json += wxT("\"");
+        // KICLOUD: P3-K the accelerator text (after the tab in the label) is shown right-aligned
+        {
+            const wxString full = item->GetItemLabel();
+            const int tab = full.Find(wxT('\t'));
+            if (tab != wxNOT_FOUND && !item->GetSubMenu())
+                json += wxT(",\"accel\":\"") + wxDomJsonEscape(full.Mid(tab + 1));
+            else
+                json += wxT(",\"accel\":\"");
+        }
         json += wxString::Format(
             wxT("\",\"checked\":%s,\"enabled\":%s"),
             item->IsCheckable() && item->IsChecked() ? "true" : "false",
