@@ -1127,6 +1127,17 @@ if (typeof navigator !== 'undefined') {
   //     neither as inert candidates nor as shadowing windows.
   // Non-overlapping windows (e.g. two side-by-side modeless dialogs) are left
   // interactive — only a genuine overlap blocks input.
+  // KICLOUD: P3-I T14 the innermost modal dialog's window id (-1: none), set by
+  // src/wasm/dialog.cpp. While one shows, every top-level window below it is inert,
+  // overlapped or not, and so are the main window's controls: native ports disable the
+  // windows a modal dialog does not own.
+  var modalTopId = -1;
+  var setModalTopWindow = function (id) {
+    modalTopId = id;
+    globalThis.__wxModalTopWindow = id;   // for tests and debugging
+    wxScheduleBarrierRecompute();
+  };
+
   var recomputeModalBarrier = function () {
     if (typeof document === 'undefined') return; // worker context: no DOM
     var wins = [];
@@ -1143,10 +1154,14 @@ if (typeof navigator !== 'undefined') {
       wins.push({ el: el, z: z, rect: el.getBoundingClientRect() });
     });
 
+    var modal = null;
+    wins.forEach(function (w) {
+      if (modalTopId >= 0 && windowMap.get(modalTopId) && windowMap.get(modalTopId).window === w.el) modal = w;
+    });
     wins.forEach(function (w) {
       var shadowed = wins.some(function (o) {
         return o !== w && o.z > w.z && rectsOverlap(o.rect, w.rect);
-      });
+      }) || (modal !== null && w !== modal && w.z < modal.z);   // KICLOUD: P3-I T14
       w.el.classList.toggle('wx-inert', shadowed);
       // Also block focus/keyboard on the shadowed window where supported; the
       // pointer-events CSS above is what actually re-routes the clicks.
@@ -1168,8 +1183,8 @@ if (typeof navigator !== 'undefined') {
       mainData.window.querySelectorAll(
           '.wx-dom-control, .wx-tab-strip, [data-wx-menu-bar="1"]')
         .forEach(function (c) {
-          var covered = false;
-          if (wins.length) {
+          var covered = modal !== null;   // KICLOUD: P3-I T14
+          if (!covered && wins.length) {
             var cr = c.getBoundingClientRect();
             if (cr.width > 0 && cr.height > 0) {
               covered = wins.some(function (w) { return rectsOverlap(w.rect, cr); });
@@ -1461,6 +1476,11 @@ if (typeof navigator !== 'undefined') {
 
   var destroyGLCanvas = function (id) {
     var canvas = glCanvasMap.get(id);
+    if (canvas) {
+      // KICLOUD: P3-I T14 release the drawing buffer now, not at the canvas's collection
+      canvas.width = 0;
+      canvas.height = 0;
+    }
     if (canvas && canvas.parentNode) {
       canvas.parentNode.removeChild(canvas);
     }

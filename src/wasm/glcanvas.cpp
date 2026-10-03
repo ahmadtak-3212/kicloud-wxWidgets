@@ -448,6 +448,17 @@ wxGLCanvas::~wxGLCanvas()
 {
     if ( m_webglContext > 0 )
     {
+        // KICLOUD: P3-I T14 lose the context before Emscripten forgets it: destroying it only
+        // drops it from Emscripten's table, and the browser kept its drawing buffers and GPU
+        // objects until a garbage collection (each PCB 3D viewer open/close kept ~40-90 MB)
+        EM_ASM({
+            var c = (typeof GL !== 'undefined' && GL.contexts) ? GL.contexts[$0] : null;
+            var gl = c && c.GLctx;
+            if (gl && !gl.isContextLost()) {
+                var ext = gl.getExtension('WEBGL_lose_context');
+                if (ext) ext.loseContext();
+            }
+        }, m_webglContext);
         emscripten_webgl_destroy_context(m_webglContext);
         m_webglContext = 0;
     }

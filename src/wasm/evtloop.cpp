@@ -581,7 +581,7 @@ EM_JS(void, wxWasmArmJspiJobTickJs, (), {
             if (Module["_wx_dispatch_abandon"]) Module["_wx_dispatch_abandon"]();
             S.resolveTopWait('nested', 0);
             S.resolveTopWait('modal', 5101);
-            console.warn("[wx-scheduler] job tick error: " + e);
+            console.warn("[wx-scheduler] job tick error: " + ((e && e.stack) || e)); /* KICLOUD: P3-I T14 with the stack */
         });
     }, 0);
 });

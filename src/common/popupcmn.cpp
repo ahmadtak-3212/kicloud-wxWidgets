@@ -319,6 +319,18 @@ void wxPopupTransientWindow::Popup(wxWindow *winFocus)
     m_child->PushEventHandler(m_handlerPopup);
 
     m_focus = winFocus ? winFocus : this;
+#ifdef __WXWASM__
+    // KICLOUD: P3-I T14 a popup opened from its focused owner (a combo's text: KiCad's font
+    // field opens its list while the user types) leaves the keyboard focus there, as on GTK, where
+    // a popup window takes no keyboard focus from the owner's frame. Moving it made the owner lose
+    // the focus mid-typing (KiCad's FONT_CHOICE then replaced the typed text with the default
+    // font). The owner forwards keys to the popup (wxComboCtrl), and a press outside dismisses it
+    // (wxWasmDismissTransientPopupsOutside), so no focus handler is pushed.
+    wxWindow * const focused = FindFocus();
+    if ( focused && GetParent() && (focused == GetParent() || GetParent()->IsDescendant(focused)) )
+        m_focus = NULL;
+    else
+#endif
     m_focus->SetFocus();
 
 #if defined(__WXGTK__)

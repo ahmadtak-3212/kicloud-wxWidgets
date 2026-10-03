@@ -99,4 +99,11 @@ public:
     wxDECLARE_NO_COPY_CLASS(wxWasmDispatchGuard);
 };
 
+// KICLOUD: P3-I T14 the innermost modal dialog (src/wasm/dialog.cpp), and whether input to
+// `win` is blocked because a modal dialog that does not own it is showing (native ports
+// disable those windows).
+class WXDLLIMPEXP_FWD_CORE wxWindow;
+WXDLLIMPEXP_CORE wxWindow* wxWasmModalTop();
+WXDLLIMPEXP_CORE bool wxWasmBlockedByModal(const wxWindow* win);
+
 #endif // _WX_WASM_PRIVATE_DISPATCH_H_

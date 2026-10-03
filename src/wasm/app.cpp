@@ -68,6 +68,10 @@ wxApp::wxApp()
     // LC_NUMERIC stays "C". See docs/patches.md (B1.7).
     setlocale(LC_CTYPE, "C.UTF-8");
 
+    // KICLOUD: P3-I T14 printing goes to the browser's print dialog (src/wasm/utils.cpp)
+    extern void wxWasmInstallPrintFactory();
+    wxWasmInstallPrintFactory();
+
     RegisterEmscriptenCallbacks(this);
 }
 
@@ -202,7 +206,10 @@ wxWindow *wxApp::GetMouseWindow(const wxPoint& position) const
     }
     else
     {
-        return wxFindWindowAtPoint(position);
+        // KICLOUD: P3-I T14 windows a modal dialog does not own take no pointer input (the
+        // native ports disable them), see wxWasmBlockedByModal in src/wasm/dialog.cpp
+        wxWindow *window = wxFindWindowAtPoint(position);
+        return wxWasmBlockedByModal(window) ? NULL : window;
     }
 }
 
@@ -221,6 +228,11 @@ bool wxApp::HandleKeyEvent(wxKeyEvent *event)
 
     wxWindow *window = wxWindow::FindFocus();
     //printf("KeyEvent: window %p\n", window);
+
+    // KICLOUD: P3-I T14 keys go to the modal dialog when the focus is in a window it does not
+    // own (that window is disabled on the native ports)
+    if (window != NULL && wxWasmBlockedByModal(window))
+        window = wxWasmModalTop();
 
     if (window != NULL && window->IsEnabled())
     {
@@ -1058,7 +1070,7 @@ bool TranslateMenuAccel(const wxKeyEvent &event)
     wxWindow *top = focus ? wxGetTopLevelParent(focus)
                           : wxTheApp ? wxTheApp->GetTopWindow() : NULL;
     wxFrame *frame = wxDynamicCast(top, wxFrame);
-    if (frame == NULL)
+    if (frame == NULL || wxWasmBlockedByModal(frame))   // KICLOUD: P3-I T14 not under a modal
         return false;
 
     wxMenuBar *menuBar = frame->GetMenuBar();
@@ -1082,6 +1094,8 @@ bool wxWasmNavigateByTab(const wxKeyEvent &event)
 {
     wxWindow *focus = wxWindow::FindFocus();
     if (focus == NULL || focus->IsTopLevel() || focus->HasFlag(wxWANTS_CHARS))
+        return false;
+    if (wxWasmBlockedByModal(focus))   // KICLOUD: P3-I T14
         return false;
 #if wxUSE_TEXTCTRL
     if (wxDynamicCast(focus, wxTextCtrl) != NULL && focus->HasFlag(wxTE_PROCESS_TAB))

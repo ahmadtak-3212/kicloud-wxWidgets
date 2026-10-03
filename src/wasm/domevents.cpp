@@ -151,6 +151,10 @@ void EMSCRIPTEN_KEEPALIVE wx_dom_event(int domId, int kind)
     wxWindowWasm *window = it->second;
     if ( !window->IsEnabled() )
         return;
+    // KICLOUD: P3-I T14 a control of a window under a modal dialog takes no input (the page
+    // makes those windows inert; this catches what slips through)
+    if ( wxWasmBlockedByModal(window) )
+        return;
 
     if ( wxWasmDispatchParked() || wxWasmQueuedInput > 0 )
     {

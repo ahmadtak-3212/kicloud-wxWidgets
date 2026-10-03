@@ -48,7 +48,53 @@
 #include "wx/wasm/private/yieldwait.h"
 
 #include <emscripten.h>
+#include <algorithm>
 #include <cstdio>
+#include <vector>
+
+// KICLOUD: P3-I T14 (menu audit: a click on the Symbol Fields Table behind its "Wrote BOM output"
+// box ran a grid handler that opened a second modal under the first and trapped). Native ports
+// disable every other window while a dialog is modal (the OS, or wxWindowDisabler); this port's
+// dialogs and frames are page elements, so it keeps the stack of modal dialogs itself: input
+// (mouse and wheel hit-tests, keys, DOM control events) reaches only the innermost modal dialog
+// and the windows it owns, and the page's input barrier makes every other window inert.
+// Entries are compared, never dereferenced (a dialog may be gone when its wait ends).
+static std::vector<wxDialog*> s_wasmModalStack;
+
+static void wxWasmModalStackChanged()
+{
+    int id = -1;
+    if ( !s_wasmModalStack.empty() )
+        id = s_wasmModalStack.back()->GetCSSId();
+    EM_ASM({ if (typeof setModalTopWindow === 'function') setModalTopWindow($0); }, id);
+}
+
+static void wxWasmModalStackRemove(wxDialog* dlg)
+{
+    auto it = std::remove(s_wasmModalStack.begin(), s_wasmModalStack.end(), dlg);
+    if ( it == s_wasmModalStack.end() )
+        return;
+    s_wasmModalStack.erase(it, s_wasmModalStack.end());
+    wxWasmModalStackChanged();
+}
+
+wxWindow* wxWasmModalTop()
+{
+    return s_wasmModalStack.empty() ? NULL : s_wasmModalStack.back();
+}
+
+bool wxWasmBlockedByModal(const wxWindow* win)
+{
+    const wxWindow* top = wxWasmModalTop();
+    if ( !top || !win )
+        return false;
+    for ( const wxWindow* w = win; w; w = w->GetParent() )
+    {
+        if ( w == top )
+            return false;
+    }
+    return true;
+}
 
 //-----------------------------------------------------------------------------
 // wxDialog
@@ -241,7 +287,9 @@ int wxDialog::ShowModal()
 
     m_modalWait = &wait;
     m_isShowingModal = true;
+    s_wasmModalStack.push_back(this); // KICLOUD: P3-I T14
     Show(true);
+    wxWasmModalStackChanged();
 
     // Suspend the C++ stack until EndModal() ends the wait and every blocking
     // call begun after this one has returned.
@@ -262,6 +310,9 @@ int wxDialog::ShowModal()
     // pointing at this wait, which goes out of scope now: forget it.
     if ( !wait.IsEndedByOwner() )
         m_modalWait = NULL;
+
+    // KICLOUD: P3-I T14 a wait ended by the error containment leaves the dialog in the stack
+    wxWasmModalStackRemove(this);
 
     return result;
 }
@@ -286,6 +337,7 @@ void wxDialog::EndModal(int retCode)
     }
 
     m_isShowingModal = false;
+    wxWasmModalStackRemove(this); // KICLOUD: P3-I T14
 
     // KICLOUD: W3.0P (kicloud/TODO.md E2.4 "EndModal(): Resolve(token)"; W3.0P lens 2):
     // end THIS dialog's wait; PCBJam resolved the innermost registered modal wait, which
