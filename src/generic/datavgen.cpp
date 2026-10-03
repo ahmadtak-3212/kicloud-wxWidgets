@@ -2128,7 +2128,7 @@ wxDataViewMainWindow::wxDataViewMainWindow( wxDataViewCtrl *parent, wxWindowID i
 
     m_hasFocus = false;
 
-    SetBackgroundColour( *wxWHITE );
+    SetBackgroundColour( wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX) );   // KICLOUD: P3-K the theme's field colour (was white)
 
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 

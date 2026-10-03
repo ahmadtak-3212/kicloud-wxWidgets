@@ -96,7 +96,7 @@ void wxNotebook::WasmRebuildTabs()
             json += wxT(",");
 
         json += wxT("{\"label\":\"");
-        json += wxDomJsonEscape(m_titles[n]);
+        json += wxDomJsonEscape(wxControl::RemoveMnemonics(m_titles[n]));  // KICLOUD: P3-K no literal '&'
         json += wxString::Format(wxT("\",\"selected\":%s}"),
                                  (int)n == m_selection ? "true" : "false");
     }

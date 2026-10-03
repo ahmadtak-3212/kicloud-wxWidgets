@@ -333,10 +333,11 @@ void wxFileData::MakeItem( wxListItem &item )
 {
     item.m_text = m_fileName;
     item.ClearAttributes();
+    // KICLOUD: P3-K readable on the dark theme's field colour (pure blue and red were not)
     if (IsExe())
-        item.SetTextColour(*wxRED);
+        item.SetTextColour(wxSystemSettings::SelectLightDark(*wxRED, wxColour(0xff, 0x8a, 0x80)));
     if (IsDir())
-        item.SetTextColour(*wxBLUE);
+        item.SetTextColour(wxSystemSettings::SelectLightDark(*wxBLUE, wxColour(0x9d, 0xb0, 0xff)));
 
     item.m_image = m_image;
 

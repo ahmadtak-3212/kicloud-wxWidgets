@@ -137,6 +137,19 @@ void wxGenericHyperlinkCtrl::ConnectMenuHandlers()
           wxHYPERLINK_POPUP_COPY_ID);
 }
 
+// KICLOUD: P3-K (menu audit: the Find dialogs' "Show search panel (Ctrl+F)" link was clipped). The
+// label changes the best size; on the native ports a changed label relays the control out, here
+// the sizer kept the width of the label the control was created with.
+void wxGenericHyperlinkCtrl::SetLabel(const wxString& label)
+{
+    wxHyperlinkCtrlBase::SetLabel(label);
+    InvalidateBestSize();
+    Refresh();
+    wxWindow* const parent = GetParent();
+    if ( parent && parent->GetSizer() )
+        parent->Layout();
+}
+
 wxSize wxGenericHyperlinkCtrl::DoGetBestClientSize() const
 {
     wxClientDC dc(const_cast<wxGenericHyperlinkCtrl*>(this));

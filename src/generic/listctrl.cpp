@@ -5746,7 +5746,7 @@ wxGenericListCtrl::GetClassDefaultAttributes(wxWindowVariant variant)
     wxUnusedVar(variant);
     wxVisualAttributes attr;
     attr.colFg = wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOXTEXT);
-    attr.colBg = *wxWHITE; //wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX);
+    attr.colBg = wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX); // KICLOUD: P3-K the theme's field colour (was white: unreadable in dark)
     attr.font  = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
     return attr;
 #endif

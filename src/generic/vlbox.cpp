@@ -94,7 +94,7 @@ bool wxVListBox::Create(wxWindow *parent,
     // make sure the native widget has the right colour since we do
     // transparent drawing by default
     //SetBackgroundColour(GetBackgroundColour());
-    SetBackgroundColour(*wxWHITE);
+    SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX));   // KICLOUD: P3-K the theme's field colour (was white)
 
     // leave m_colBgSel in an invalid state: it means for OnDrawBackground()
     // to use wxRendererNative instead of painting selection bg ourselves

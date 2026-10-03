@@ -87,7 +87,9 @@ void wxStaticText::WXSetVisibleLabel(const wxString& str)
     m_visibleLabel = str;
 
     if (WasmGetDomId())
-        wxDomSetText(WasmGetDomId(), m_visibleLabel);
+        // KICLOUD: P3-K the mnemonic marker is not shown ("&Search for:" -> "Search for:",
+        // "&&" -> "&"), as on desktop.
+        wxDomSetText(WasmGetDomId(), wxControl::RemoveMnemonics(m_visibleLabel));
 }
 
 #endif // wxUSE_STATTEXT

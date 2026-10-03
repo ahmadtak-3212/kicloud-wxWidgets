@@ -66,6 +66,12 @@ bool wxNonOwnedWindow::Create(wxWindow *parent,
 
     wxTopLevelWindows.Append(this);
 
+    // KICLOUD: P3-K a top-level window has no minimum size of its own. wxWindowBase::CreateBase
+    // makes the creation size the minimum of every window not yet in wxTopLevelWindows, and this
+    // port appends the window only after that: every dialog got the display size as its minimum,
+    // so Fit() could not shrink it to its content (Add Design Variant filled the page).
+    SetMinSize(wxDefaultSize);
+
     // The first TLW is the browser main window — the page itself — which
     // has no hidden state. Apps need not ever call Show(true) on it
     // (KiCad doesn't), so the visibility sync must not treat it as a
@@ -90,6 +96,25 @@ void wxNonOwnedWindow::DoSetSize(int x, int y,
                                  int sizeFlags)
 {
     //printf("DoSetSize: %d, %d, %d, %d, %d\n", GetCSSId(), x, y, width, height);
+
+    // KICLOUD: P3-K a top-level window keeps its minimum and maximum size, as on every native
+    // port (the window manager enforces them). KiCad's DIALOG_SHIM::Show re-applies the dialog's
+    // initial size (Preferences: 980 x 560) after PAGED_DIALOG::onPageChanged had grown the dialog
+    // to its page's minimum; without the clamp the page was laid out too short (Preferences >
+    // Common overlapped its controls and clipped the last rows).
+    if (!IsMainFrame())
+    {
+        if (width != wxDefaultCoord)
+        {
+            if (GetMinWidth() != wxDefaultCoord && width < GetMinWidth()) width = GetMinWidth();
+            if (GetMaxWidth() != wxDefaultCoord && width > GetMaxWidth()) width = GetMaxWidth();
+        }
+        if (height != wxDefaultCoord)
+        {
+            if (GetMinHeight() != wxDefaultCoord && height < GetMinHeight()) height = GetMinHeight();
+            if (GetMaxHeight() != wxDefaultCoord && height > GetMaxHeight()) height = GetMaxHeight();
+        }
+    }
 
     wxRect oldRect = GetScreenRect();
     wxNonOwnedWindowBase::DoSetSize(x, y, width, height, sizeFlags);
