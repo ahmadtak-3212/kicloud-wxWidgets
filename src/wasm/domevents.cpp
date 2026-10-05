@@ -21,6 +21,8 @@
 #include "wx/wasm/private/mouse.h"
 #include "wx/wasm/private/mailbox.h"   // KICLOUD: P3-I
 #include "wx/weakref.h"                // KICLOUD: P3-I
+#include "wx/progdlg.h"                // KICLOUD: PERF (docs/patches.md), D3
+#include "wx/toplevel.h"                // KICLOUD: PERF (docs/patches.md), D3
 
 #include <emscripten.h>
 #include <emscripten/html5.h>
@@ -155,6 +157,25 @@ void EMSCRIPTEN_KEEPALIVE wx_dom_event(int domId, int kind)
     // makes those windows inert; this catches what slips through)
     if ( wxWasmBlockedByModal(window) )
         return;
+
+    // KICLOUD: PERF (docs/patches.md), D3: a control of a progress dialog (its Cancel or Skip
+    // button) is delivered at once even while a chain is parked. The chain that is parked is the
+    // long operation the dialog reports on (zone fill, DRC: its main thread waits for the thread
+    // pool and suspends, wasm/shims/main_thread_wait.c); deferring the click until that chain
+    // ends made Cancel do nothing. On the desktop the same click is read inside the dialog's
+    // Update() while every other window is disabled; here the dialog's handler (it only marks the
+    // dialog cancelled or skipped) runs from this entry. Other windows stay deferred: KiCad keeps
+    // them disabled for the dialog's life anyway (WX_PROGRESS_REPORTER).
+#if wxUSE_PROGRESSDLG
+    if ( wxWasmDispatchParked() && wxDynamicCast(wxGetTopLevelParent(window), wxProgressDialog) )
+    {
+        wxWasmDispatchGuard progressGuard;
+        gs_currentEventDomId = domId;
+        window->OnDomEvent(static_cast<wxDomEventKind>(kind));
+        gs_currentEventDomId = 0;
+        return;
+    }
+#endif
 
     if ( wxWasmDispatchParked() || wxWasmQueuedInput > 0 )
     {
