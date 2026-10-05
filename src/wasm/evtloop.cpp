@@ -300,9 +300,25 @@ static bool s_wakeRequested = true;   // a JS wake was sent since the last tick 
 static bool s_idleOwed = true;        // the next idle-capable tick must run ProcessIdle
 static std::atomic<bool> s_threadWakePosted(false);
 static unsigned s_missedWakes = 0;    // heartbeat ticks that found unannounced work
+// KICLOUD: PERF (docs/patches.md), D2: idle owed only because a timer fired (idle = 2). Such idle
+// passes run at most every TIMER_IDLE_MS: a KiCad canvas whose GAL is not ready (a hidden frame)
+// re-arms a 100 ms timer forever (EDA_DRAW_PANEL_GAL::ForceRefresh), and an idle pass after
+// every expiry kept the loop ticking ~30 times a second for nothing. Input still gets its idle
+// pass at once; a timer's repaint (Invalidate) is not delayed, only its UpdateUI.
+static bool s_timerIdleOwed = false;
+static double s_lastIdleMs = 0;
+static const double TIMER_IDLE_MS = 250;
 
 EM_JS(void, wxWasmRequestTickJs, (), {
     if (globalThis.__wxScheduler && globalThis.__wxScheduler.requestTick) globalThis.__wxScheduler.requestTick();
+});
+
+// Ask for a tick after ms milliseconds (one pending at a time; an earlier wake runs it sooner).
+EM_JS(void, wxWasmRequestTickLaterJs, (double ms), {
+    var S = globalThis.__wxScheduler;
+    if (!S || !S.requestTick || S.__tickLaterArmed) return;
+    S.__tickLaterArmed = true;
+    setTimeout(function () { S.__tickLaterArmed = false; S.requestTick(); }, ms);
 });
 
 // 1 when the tick now running was started by the loop's heartbeat rather than by a wake.
@@ -313,6 +329,18 @@ EM_JS(int, wxWasmTickWasHeartbeatJs, (), {
 
 static void wxWasmRequestTickMain(int idle)
 {
+    if (idle == 2)
+    {
+        // A timer fired: idle is owed, but not sooner than TIMER_IDLE_MS after the last pass.
+        s_timerIdleOwed = true;
+        const double wait = s_lastIdleMs + TIMER_IDLE_MS - emscripten_get_now();
+        if (wait > 0)
+        {
+            wxWasmRequestTickLaterJs(wait);
+            return;
+        }
+        idle = 1;
+    }
     if (idle)
         s_idleOwed = true;
     // Already asked since the last tick began: that tick is still coming (the JS flag is set).
@@ -330,7 +358,8 @@ static void wxWasmRequestTickFromThread()
 
 extern "C" {
 
-    // Ask the top-level loop for a tick (see above). idle != 0 also owes wx idle processing.
+    // Ask the top-level loop for a tick (see above). idle 1 also owes wx idle processing; idle 2
+    // (a timer fired) owes it no sooner than TIMER_IDLE_MS after the last idle pass.
     // Callable from any thread: a pool thread (wxQueueEvent from a worker) queues one call to
     // the main thread instead of touching main-thread state. Sets flags only and never suspends,
     // so it is safe from plain entries and while a dispatch chain is parked. Exported for the
@@ -382,19 +411,29 @@ static void wxWasmProcessEventsUngated(bool topLevel = false)
 
     wxWasmDispatchGuard guard;
     if (topLevel)
+    {
         s_wakeRequested = false;   // wakes from here on ask for the next tick
+        if (s_timerIdleOwed && emscripten_get_now() - s_lastIdleMs >= TIMER_IDLE_MS)
+            s_idleOwed = true;     // a timer's idle pass is due now
+    }
     wxTheApp->ProcessPendingEvents();
     wxTheApp->Paint();
     if (counter++ % 3 == 0 && (!topLevel || s_idleOwed))
     {
         if (topLevel)
+        {
             s_idleOwed = false;
+            s_timerIdleOwed = false;
+            s_lastIdleMs = emscripten_get_now();
+        }
         if (wxTheApp->ProcessIdle() && topLevel)
             s_idleOwed = true;     // RequestMore: native wx keeps sending idle events
         ++s_idlePasses;
     }
     if (topLevel && s_idleOwed)
         wxWasmRequestTickMain(1);
+    else if (topLevel && s_timerIdleOwed)
+        wxWasmRequestTickMain(2);
 }
 
 extern "C" {
