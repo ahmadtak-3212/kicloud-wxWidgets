@@ -1319,10 +1319,18 @@ bool wxWindowWasm::HasTransparentBackground()
            GetBackgroundColour().Alpha() == 0;
 }
 
+// KICLOUD: PERF (docs/patches.md), D2: the event-driven loop's wake (evtloop.cpp).
+extern "C" void wxWasmRequestTick(int idle);
+
 void wxWindowWasm::Invalidate(bool needsPaint)
 {
     m_selfNeedsPaint |= needsPaint;
     m_childNeedsPaint = true;
+
+    // KICLOUD: PERF (docs/patches.md), D2: a window marked for repaint asks the event-driven
+    // top-level loop for a tick (a repaint only: it does not owe wx idle processing). Repeated
+    // calls before that tick cost a flag test.
+    wxWasmRequestTick(0);
 
     // Always walk up to the top-level window, even when this window's flags
     // are already set. An early-out here (skip the walk if m_childNeedsPaint

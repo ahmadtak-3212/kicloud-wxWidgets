@@ -46,6 +46,9 @@ extern "C" void wxWasmRunOnDispatchContext(void (*fn)(void *), void *arg);
 
 void RegisterEmscriptenCallbacks(wxApp* app);
 
+// KICLOUD: PERF (docs/patches.md), D2: the event-driven loop's wake (evtloop.cpp).
+extern "C" void wxWasmRequestTick(int idle);
+
 // WASM-specific logger that outputs to browser console
 extern wxLog* wxCreateLogWasm();
 
@@ -224,6 +227,10 @@ void wxApp::UpdateMouseState(const wxKeyEvent& event)
 
 bool wxApp::HandleKeyEvent(wxKeyEvent *event)
 {
+    // KICLOUD: PERF (docs/patches.md), D2: input asks the event-driven loop for a tick that
+    // runs wx idle afterwards (UpdateUI), as native wx sends idle after events.
+    wxWasmRequestTick(1);
+
     //printf("HandleKeyEvent: %d\n", event->GetEventType());
 
     wxWindow *window = wxWindow::FindFocus();
@@ -364,6 +371,10 @@ void wxApp::ProcessPendingEvents()
 
 void wxApp::HandleMouseEvent(wxMouseEvent *event)
 {
+    // KICLOUD: PERF (docs/patches.md), D2: input asks the event-driven loop for a tick that
+    // runs wx idle afterwards (UpdateUI), as native wx sends idle after events.
+    wxWasmRequestTick(1);
+
     if (wxWasmDispatchParked())
     {
         // Another dispatch chain is suspended mid-handler; running mouse
@@ -614,6 +625,10 @@ static void WheelReplay(void *p)
 
 void wxApp::HandleMouseWheelEvent(wxMouseEvent *event)
 {
+    // KICLOUD: PERF (docs/patches.md), D2: input asks the event-driven loop for a tick that
+    // runs wx idle afterwards (UpdateUI), as native wx sends idle after events.
+    wxWasmRequestTick(1);
+
     if (wxWasmMailboxMustDefer())
     {
         // Queue the tick for delivery when the interlock frees instead of
@@ -661,6 +676,10 @@ void wxApp::HandleMouseWheelEvent(wxMouseEvent *event)
 
 void wxApp::HandleSizeEvent(const wxSizeEvent &event)
 {
+    // KICLOUD: PERF (docs/patches.md), D2: input asks the event-driven loop for a tick that
+    // runs wx idle afterwards (UpdateUI), as native wx sends idle after events.
+    wxWasmRequestTick(1);
+
     wxSize newSize = event.GetSize();
     //printf("HandleSizeEvent: %d %d\n", newSize.GetWidth(), newSize.GetHeight());
 
@@ -689,6 +708,10 @@ void wxApp::HandleSizeEvent(const wxSizeEvent &event)
 
 void wxApp::HandleActivateEvent(wxActivateEvent *event)
 {
+    // KICLOUD: PERF (docs/patches.md), D2: input asks the event-driven loop for a tick that
+    // runs wx idle afterwards (UpdateUI), as native wx sends idle after events.
+    wxWasmRequestTick(1);
+
     //printf("HandleActivateEvent\n");
     wxWindow *topWindow = GetTopWindow();
 
@@ -702,6 +725,10 @@ void wxApp::HandleActivateEvent(wxActivateEvent *event)
 
 void wxApp::HandleCloseEvent(wxCloseEvent *event)
 {
+    // KICLOUD: PERF (docs/patches.md), D2: input asks the event-driven loop for a tick that
+    // runs wx idle afterwards (UpdateUI), as native wx sends idle after events.
+    wxWasmRequestTick(1);
+
     //printf("close message\n");
     wxWindow *topWindow = GetTopWindow();
 

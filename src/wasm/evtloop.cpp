@@ -17,9 +17,11 @@
 #include "wx/wasm/private/yieldwait.h"
 
 #include <emscripten.h>
+#include <emscripten/threading.h>  // KICLOUD: PERF (docs/patches.md): wxWasmRequestTick from pool threads
 #include <stdio.h>   // printf: diagnostics land in the browser console
 #include <string.h>  // KICLOUD: W3.0P (E2.4): strcmp for wxWasmNestedWait's kinds
 
+#include <atomic>    // KICLOUD: PERF (docs/patches.md): the cross-thread wake latch
 #include <deque>
 #include <vector>    // KICLOUD: W3.0P (E2.4): the nested blocking calls (wxWasmNestedWait)
 
@@ -281,18 +283,118 @@ extern "C" void wxWasmResolveTopWait(const char *kind, int result)
 // delivers them instead of racing it with the next click.
 static unsigned s_idlePasses = 0;
 
-static void wxWasmProcessEventsUngated()
+// ----------------------------------------------------------------------------
+// Event-driven top-level loop: the wake requests
+// ----------------------------------------------------------------------------
+// KICLOUD: PERF (docs/patches.md), D2. The top-level loop parks until something asks for a tick
+// (jspi-scheduler.js loopWait/requestTick). Two kinds of request:
+//   * a repaint only (idle = 0): a window was invalidated (wxWindowWasm::Invalidate);
+//   * a tick that also owes wx idle processing (idle = 1): an input event, a timer that fired, a
+//     queued wx event (wxWakeUpIdle -> wxGUIEventLoop::WakeUp), a host call into the model, or an
+//     idle handler that asked for more. Native wx sends idle after events the same way.
+// A repaint alone does not owe idle: UpdateUI handlers that refresh a control would otherwise keep
+// idle running forever.
+// State is main-thread only, except s_threadWakePosted, the latch that limits wakes from other
+// threads to one queued main-thread call at a time.
+static bool s_wakeRequested = true;   // a JS wake was sent since the last tick began
+static bool s_idleOwed = true;        // the next idle-capable tick must run ProcessIdle
+static std::atomic<bool> s_threadWakePosted(false);
+static unsigned s_missedWakes = 0;    // heartbeat ticks that found unannounced work
+
+EM_JS(void, wxWasmRequestTickJs, (), {
+    if (globalThis.__wxScheduler && globalThis.__wxScheduler.requestTick) globalThis.__wxScheduler.requestTick();
+});
+
+// 1 when the tick now running was started by the loop's heartbeat rather than by a wake.
+EM_JS(int, wxWasmTickWasHeartbeatJs, (), {
+    var S = globalThis.__wxScheduler;
+    return (S && S._lastTickHeartbeat) ? 1 : 0;
+});
+
+static void wxWasmRequestTickMain(int idle)
+{
+    if (idle)
+        s_idleOwed = true;
+    // Already asked since the last tick began: that tick is still coming (the JS flag is set).
+    if (s_wakeRequested)
+        return;
+    s_wakeRequested = true;
+    wxWasmRequestTickJs();
+}
+
+static void wxWasmRequestTickFromThread()
+{
+    s_threadWakePosted.store(false);
+    wxWasmRequestTickMain(1);
+}
+
+extern "C" {
+
+    // Ask the top-level loop for a tick (see above). idle != 0 also owes wx idle processing.
+    // Callable from any thread: a pool thread (wxQueueEvent from a worker) queues one call to
+    // the main thread instead of touching main-thread state. Sets flags only and never suspends,
+    // so it is safe from plain entries and while a dispatch chain is parked. Exported for the
+    // scheduler shim's host-call wrappers (Module._wxWasmRequestTick).
+    void EMSCRIPTEN_KEEPALIVE wxWasmRequestTick(int idle)
+    {
+        if (!emscripten_is_main_runtime_thread())
+        {
+            if (!s_threadWakePosted.exchange(true))
+                emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_V, wxWasmRequestTickFromThread);
+            return;
+        }
+        wxWasmRequestTickMain(idle);
+    }
+
+    // Plain export for diagnostics and tests: heartbeat ticks that found work no wake announced.
+    unsigned EMSCRIPTEN_KEEPALIVE wxWasmMissedWakeCount()
+    {
+        return s_missedWakes;
+    }
+
+}  // extern "C"
+
+// Whether a shown, unfrozen, non-empty top-level window still waits for a repaint. Hidden
+// windows keep their flags until shown (DoPaint skips them), so they do not count.
+static bool wxWasmVisiblePaintPending()
+{
+    for (wxWindowList::iterator it = wxTopLevelWindows.begin(); it != wxTopLevelWindows.end(); ++it)
+    {
+        wxWindow *w = *it;
+        if (w && w->IsShown() && !w->IsFrozen() && w->NeedsPaint())
+        {
+            const wxSize sz = w->GetClientSize();
+            if (sz.GetWidth() > 0 && sz.GetHeight() > 0)
+                return true;
+        }
+    }
+    return false;
+}
+
+// One pass of pending events, repaint and (every third pass) wx idle processing.
+// topLevel = false: wxGUIEventLoop::Dispatch()/wxYield, nested in a running chain: unchanged
+// behaviour (idle every third pass). topLevel = true: the event-driven loop's tick (KICLOUD: PERF,
+// D2): idle runs only when owed, and the tick asks for the next one while idle is still owed (so
+// the third-pass cadence reaches it) or an idle handler asked for more.
+static void wxWasmProcessEventsUngated(bool topLevel = false)
 {
     static int counter = 0;
 
     wxWasmDispatchGuard guard;
+    if (topLevel)
+        s_wakeRequested = false;   // wakes from here on ask for the next tick
     wxTheApp->ProcessPendingEvents();
     wxTheApp->Paint();
-    if (counter++ % 3 == 0)
+    if (counter++ % 3 == 0 && (!topLevel || s_idleOwed))
     {
-        wxTheApp->ProcessIdle();
+        if (topLevel)
+            s_idleOwed = false;
+        if (wxTheApp->ProcessIdle() && topLevel)
+            s_idleOwed = true;     // RequestMore: native wx keeps sending idle events
         ++s_idlePasses;
     }
+    if (topLevel && s_idleOwed)
+        wxWasmRequestTickMain(1);
 }
 
 extern "C" {
@@ -325,11 +427,16 @@ extern "C" {
             // would interleave two C++ stacks over the same widget state.
             // Keep painting so the UI stays live; queued events dispatch on
             // the first tick after the suspended chain resumes.
+            // KICLOUD: PERF (docs/patches.md), D2: keep ticking every frame while parked (the
+            // old loop's behaviour): the page repaints during the wait, and the first tick after
+            // the chain resumes dispatches what queued meanwhile.
+            s_wakeRequested = false;
             wxTheApp->Paint();
+            wxWasmRequestTickMain(0);
             return;
         }
 
-        wxWasmProcessEventsUngated();
+        wxWasmProcessEventsUngated(true);
     }
 
 }  // extern "C"
@@ -473,6 +580,13 @@ void wxWasmNestedWait::End(int result)
         wxWasmResolveWait(m_token, result);
 }
 
+// KICLOUD: PERF (docs/patches.md), D2: the top-level loop's park: until a wake asks for a tick
+// (then the next animation frame) or the heartbeat expires (jspi-scheduler.js loopWait). With
+// ?wxloop=frame it is the old one-frame yield.
+EM_ASYNC_JS(void, wxWasmLoopWait, (), {
+    await globalThis.__wxScheduler.loopWait();
+});
+
 // Top-level main loop: yield to the browser for ONE animation frame, then
 // return. Called in a plain C++ while-loop in DoRun (below), so each tick
 // suspends main()'s promising activation for exactly one frame and resumes.
@@ -539,6 +653,22 @@ extern "C" {
     // suspended nested DoRun.
     void EMSCRIPTEN_KEEPALIVE wxWasmTopLevelTick()
     {
+        // KICLOUD: PERF (docs/patches.md), D2: a tick started by the loop's heartbeat (no wake for
+        // HEARTBEAT_MS) only looks for work. Finding some means a wake was missed somewhere: it
+        // is processed now and counted (wxWasmMissedWakeCount) and logged, so the source can be
+        // found and given its wake.
+        if (wxTheApp && wxWasmTickWasHeartbeatJs() && !s_wakeRequested)
+        {
+            const bool pending = wxTheApp->HasPendingEvents();
+            const bool paint = wxWasmVisiblePaintPending();
+            if (!pending && !paint && !s_idleOwed)
+                return;
+            ++s_missedWakes;
+            if (s_missedWakes <= 10 || s_missedWakes % 100 == 0)
+                printf("[wx-loop] heartbeat found unannounced work (pending events %d, repaint %d, idle %d; occurrence %u)\n",
+                       pending ? 1 : 0, paint ? 1 : 0, s_idleOwed ? 1 : 0, s_missedWakes);
+        }
+
         // The tick itself is a promising export — dispatch directly; a
         // handler that suspends parks this tick's own activation.
         ProcessEvents();
@@ -677,7 +807,10 @@ int wxGUIEventLoop::DispatchTimeout(unsigned long WXUNUSED(timeout))
 
 void wxGUIEventLoop::WakeUp()
 {
-    // noop: browser doesn't block
+    // KICLOUD: PERF (docs/patches.md), D2: wxWakeUpIdle() (a queued event, CallAfter, a thread's
+    // wxQueueEvent) asks the event-driven loop for a tick that also runs idle, as native wx wakes
+    // its blocked loop. Any thread.
+    wxWasmRequestTick(1);
 }
 
 void wxGUIEventLoop::DoYieldFor(long eventsToProcess)
@@ -823,7 +956,9 @@ int wxGUIEventLoop::DoRun()
 
         // main() is a promising export; this loop's activation suspends for
         // exactly one animation frame per tick.
-        wxWasmYieldToBrowser();
+        // KICLOUD: PERF (docs/patches.md), D2: ... or, with nothing to do, until a wake asks for
+        // the next tick (event-driven loop; see wxWasmRequestTick).
+        wxWasmLoopWait();
     }
     --s_wxRunDepth;
 
