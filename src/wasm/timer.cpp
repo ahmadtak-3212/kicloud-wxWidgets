@@ -143,9 +143,8 @@ void TimerCallbackFunc::Run()
         timer->m_timer->Notify();
 
         // KICLOUD: PERF (docs/patches.md), D2: a timer event is an event: native wx sends idle
-        // after it, so ask the event-driven loop for a tick that runs idle (UpdateUI); timer
-        // idle passes are rate-limited (idle = 2, evtloop.cpp TIMER_IDLE_MS).
-        wxWasmRequestTick(2);
+        // after it, so ask the event-driven loop for a tick that runs idle (UpdateUI).
+        wxWasmRequestTick(1);
     }
 
     if (selfDestruct)

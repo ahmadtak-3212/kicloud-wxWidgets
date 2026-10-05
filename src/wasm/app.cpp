@@ -1107,18 +1107,6 @@ bool TranslateMenuAccel(const wxKeyEvent &event)
 #endif
 }
 
-// KICLOUD: PERF (docs/patches.md), D3: a menubar accelerator runs the menu command's handlers,
-// so it takes the dispatch interlock like every other handler chain (HandleKeyEvent, timers,
-// DOM events). It ran without it: a command that suspended (KiCad's Fill All Zones, B, waiting
-// for its thread pool: wasm/shims/main_thread_wait.c) left the interlock open, so queued input
-// could run over the half-done fill; with the interlock open the wait now spins instead, so the
-// guard is also what lets an accelerator's long command keep the page painting.
-bool TranslateMenuAccelInChain(const wxKeyEvent &event)
-{
-    wxWasmDispatchGuard guard;
-    return TranslateMenuAccel(event);
-}
-
 // KICLOUD: W3.0P (TODO.md E3: "Tab navigation [is] still routed to wx"; W3.0P lens 2 of the
 // K.11 retry, round r2 review). This port has no native tab traversal (wx/features.h defines
 // wxHAS_NATIVE_TAB_TRAVERSAL for GTK and Qt only), so wxControlContainer moves the focus when
@@ -1162,7 +1150,7 @@ void wxWasmRunKeyJob(void *arg)
             // while a dispatch is parked: HandleKeyEvent only queued the
             // event above, and firing a menu handler now would interleave
             // with the suspended chain's half-mutated state.
-            if (!wxWasmDispatchParked() && TranslateMenuAccelInChain(event))
+            if (!wxWasmDispatchParked() && TranslateMenuAccel(event))
             {
                 job->preventDefault = true;
             }
