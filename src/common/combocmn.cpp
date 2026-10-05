@@ -2116,6 +2116,15 @@ void wxComboCtrlBase::ShowPopup()
     if ( IsPopupWindowState(Animating) )
         return;
 
+    // KICLOUD: FIREFOX (docs/patches.md): no re-showing a popup that is being hidden.
+    // HidePopup() transfers the value to the text field before it hides the popup, and that text
+    // event can ask for the popup again (KiCad's font field filters its list and calls Popup()
+    // when Escape restores the original font). Showing it then pushed the popup's event handlers
+    // a second time while they were still installed, making the handler chain a loop: the page
+    // froze in wxWindowBase::PushEventHandler (Firefox, Escape after typing in the font field).
+    if ( IsPopupWindowState(Closing) )
+        return;
+
     SetFocus();
 
     // Space above and below

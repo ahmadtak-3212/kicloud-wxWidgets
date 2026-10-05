@@ -1100,6 +1100,17 @@
     if (el && document.activeElement !== el) el.focus();
   };
 
+  // KICLOUD: FIREFOX (docs/patches.md): whether the browser's focus is on this control (or inside it) right now. wx handles a
+  // focusin later than the browser raised it, from its event queue; by then the focus can
+  // already be on another control, and following the old event (SetFocus -> wxDomFocus) would
+  // pull the focus back. Firefox then raised the other control's focusin again, and the two
+  // controls passed the focus back and forth without end (Tab order broken, keys never handled).
+  window.wxDomIsActive = function (domId) {
+    var el = inputs.get(domId) || controls.get(domId);
+    var ae = document.activeElement;
+    return !!el && !!ae && (ae === el || el.contains(ae));
+  };
+
   // Counterpart of wxDomFocus for wx focus moving to a canvas-drawn window
   // (wxWindowWasm::SetFocus): drop browser focus from the wx-dom control that
   // still has it, so keys go back to wx. Controls outside wx-dom (the host

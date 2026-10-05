@@ -286,6 +286,13 @@ inline void wxDomFocus(int domId)
     EM_ASM({ wxDomFocus($0); }, domId);
 }
 
+// KICLOUD: FIREFOX (docs/patches.md): true when the browser's focus is on this DOM control now (see wxDomIsActive in
+// wx-dom.js): a focusin handled from the queue after the focus moved on is stale.
+inline bool wxDomIsActive(int domId)
+{
+    return EM_ASM_INT({ return (typeof wxDomIsActive !== 'function' || wxDomIsActive($0)) ? 1 : 0; }, domId) != 0;
+}
+
 // Browser focus must FOLLOW wx focus in both directions: wxDomFocus above
 // moves it onto a DOM-backed control; this drops it when wx focus moves to a
 // canvas-drawn window (a wx-dom control that kept document.activeElement

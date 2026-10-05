@@ -633,8 +633,11 @@ void wxWindowWasm::OnDomEvent(wxDomEventKind kind)
             break;
 
         case wxDOM_EVENT_FOCUSIN:
-            // Keep the wx focus model truthful when the browser moves focus.
-            if ( gs_focusWindow != this && CanAcceptFocus() )
+            // KICLOUD: FIREFOX (docs/patches.md): keep the wx focus model truthful when the browser moves focus. A focusin
+            // handled after the browser focus already left this control is stale: following
+            // it would pull the focus back and start a focus ping-pong (seen in Firefox).
+            if ( gs_focusWindow != this && CanAcceptFocus() &&
+                 (!m_domId || wxDomIsActive(m_domId)) )
                 SetFocus();
             break;
 
