@@ -699,11 +699,15 @@ EM_JS(int, wxWasmOnPromisingActivationJs, (), {
     return (S && S._actStack && S._actStack.length > 0) ? 1 : 0;
 });
 
+// KICLOUD: PERF (docs/patches.md), D1: the job tick is armed through the scheduler's
+// MessageChannel task (postTask) instead of setTimeout(0). A tick re-armed from inside a timer
+// callback nests, and after 5 nested levels browsers delay every setTimeout by at least 4 ms, so
+// a burst of input jobs (a drag) was delivered 4 ms apart and drag steps were dropped.
 EM_JS(void, wxWasmArmJspiJobTickJs, (), {
     const S = globalThis.__wxScheduler;
     if (S.__jobTickArmed) return;
     S.__jobTickArmed = true;
-    setTimeout(function () {
+    S.postTask(function () {
         S.__jobTickArmed = false;
         if (S.dead) return;
         var p = Module["_wxWasmJobTick"]();
@@ -713,24 +717,38 @@ EM_JS(void, wxWasmArmJspiJobTickJs, (), {
             S.resolveTopWait('modal', 5101);
             console.warn("[wx-scheduler] job tick error: " + ((e && e.stack) || e)); /* KICLOUD: P3-I T14 with the stack */
         });
-    }, 0);
+    });
+});
+
+// KICLOUD: PERF (docs/patches.md), D1: how many activations have suspended so far (any kind).
+// A job that suspends changes it; one that ran straight through does not.
+EM_JS(unsigned, wxWasmSuspendSeqJs, (), {
+    return globalThis.__wxScheduler._suspendSeq >>> 0;
 });
 
 extern "C" void EMSCRIPTEN_KEEPALIVE wxWasmJobTick()
 {
-    // Deliver ONE job per tick: a job that suspends (a click opening a modal)
-    // parks THIS activation; the next job must not run beneath it on the same
-    // activation, so re-arm and let a fresh tick (fresh activation) take it.
-    if (wxWasmJspiJobs().empty())
-        return;
+    // A job that suspends (a click opening a modal) parks THIS activation; the
+    // next job must not run beneath it on the same activation, so a fresh tick
+    // (fresh activation) is armed before each job while more are queued.
+    // KICLOUD: PERF (docs/patches.md), D1: PCBJam delivered ONE job per tick and re-armed, so a
+    // burst of N input jobs took N tasks (4 ms apart once the timers nested). Jobs that run
+    // straight through now run in a loop on this tick; the loop stops at the first job that
+    // suspended (the armed fresh tick takes the rest, in order) and after a bounded batch, so a
+    // flood of input still lets the page paint between batches.
+    for (int batch = 0; batch < 32 && !wxWasmJspiJobs().empty(); ++batch)
+    {
+        wxWasmJspiJob job = wxWasmJspiJobs().front();
+        wxWasmJspiJobs().pop_front();
 
-    wxWasmJspiJob job = wxWasmJspiJobs().front();
-    wxWasmJspiJobs().pop_front();
+        if (!wxWasmJspiJobs().empty())
+            wxWasmArmJspiJobTickJs();
 
-    if (!wxWasmJspiJobs().empty())
-        wxWasmArmJspiJobTickJs();
-
-    job.fn(job.arg);
+        const unsigned suspendsBefore = wxWasmSuspendSeqJs();
+        job.fn(job.arg);
+        if (wxWasmSuspendSeqJs() != suspendsBefore)
+            return;   // this activation suspended (and resumed): the armed tick owns the queue now
+    }
 }
 
 extern "C" void wxWasmRunOnDispatchContext(void (*fn)(void *), void *arg)
