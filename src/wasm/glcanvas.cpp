@@ -538,6 +538,19 @@ bool wxGLCanvas::CreateWebGLContext(const wxGLAttributes& dispAttrs)
     return true;
 }
 
+// KICLOUD: PERF (docs/patches.md), D4: whether the page asked for drawing buffers that survive
+// compositing (globalThis.__wxGlPreserveDrawingBuffer = true, or URL ?glpreserve=1). Tests that
+// read a WebGL canvas back (drawImage of the canvas: tests/lib/stable-shot.ts, tests/lib/canvas.ts)
+// set it for every page; the product does not.
+EM_JS(int, wxWasmGlPreserveDrawingBufferJs, (), {
+    try {
+        if (globalThis.__wxGlPreserveDrawingBuffer === true) return 1;
+        if (typeof location !== "undefined" && /[?&]glpreserve=1\b/.test(String(location.search || ""))) return 1;
+        if (typeof parent !== "undefined" && parent !== globalThis && parent.__wxGlPreserveDrawingBuffer === true) return 1;
+    } catch (e) { /* a cross-origin parent */ }
+    return 0;
+});
+
 /* static */
 void wxGLCanvas::ConvertWXAttrsToWebGL(const wxGLAttributes& dispAttrs,
                                         EmscriptenWebGLContextAttributes& attrs)
@@ -546,13 +559,22 @@ void wxGLCanvas::ConvertWXAttrsToWebGL(const wxGLAttributes& dispAttrs,
     attrs.alpha = true;
     attrs.depth = true;
     attrs.stencil = false;
-    attrs.antialias = true;
+    // KICLOUD: PERF (docs/patches.md), D4: no multisampled default framebuffer unless the
+    // canvas asks for one (WX_GL_SAMPLE_BUFFERS/WX_GL_SAMPLES below: the 3D viewer's
+    // anti-aliasing setting). KiCad's 2D canvas draws into its own framebuffers, smooths them
+    // with SMAA and copies the result with one full-screen quad, so a multisampled default
+    // framebuffer only cost GPU memory and a resolve every frame (PCBJam: always true).
+    attrs.antialias = false;
     attrs.premultipliedAlpha = true;
     // Keep the drawing buffer after compositing. The 3D viewer raytraces a static
     // frame and then stops redrawing; without this the buffer is cleared once the
     // render settles, so screenshots/read-back (and an idle re-composite) capture an
     // empty canvas even though the frame rendered correctly.
-    attrs.preserveDrawingBuffer = true;
+    // KICLOUD: PERF (docs/patches.md), D4: only when the page asks for it (tests that read the
+    // canvas back). What is on screen stays: the browser keeps showing the last presented frame
+    // until the next draw, and every KiCad repaint redraws the whole default framebuffer. Without
+    // preservation the browser can hand the buffer over instead of copying it every frame.
+    attrs.preserveDrawingBuffer = wxWasmGlPreserveDrawingBufferJs() ? true : false;
     attrs.powerPreference = EM_WEBGL_POWER_PREFERENCE_DEFAULT;
     attrs.failIfMajorPerformanceCaveat = false;
     attrs.majorVersion = 2;  // WebGL 2.0 by default
