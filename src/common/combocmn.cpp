@@ -190,6 +190,58 @@ wxCONSTRUCTOR_5( wxComboBox, wxWindow*, Parent, wxWindowID, Id, \
     #define FOCUS_RING 0
 #endif
 
+#ifdef __EMSCRIPTEN__
+// KICLOUD: A20 (docs/patches.md, docs/future-features/FEATURE_LOOKS.md section 11): in the browser
+// editor a read-only combo box that wx draws itself (wxGenericComboCtrl: KiCad's layer pickers,
+// net selectors, font and footprint choices, all built on wxOwnerDrawnComboBox, wxBitmapComboBox
+// or wxComboCtrl) is drawn as a rounded "pill", like the page-element <select> dropdowns that
+// web/editor/appearance/theme/editor-chrome.css styles. Before, it was a plain grey rectangle
+// with a square button. The pill itself is painted by wxGenericComboCtrl::OnPaintEvent
+// (src/generic/combog.cpp); this file gives it room: the text starts further in, clear of the
+// rounded left end (PILL_TEXT_LEFT), and the right end is the chevron's (PILL_BUTTON_WIDTH).
+//
+// The sizes are in device-independent pixels (FromDIP turns them into real pixels). They
+// match the <select> pill: its text starts 9 px in (1 px border + 8 px padding) and it keeps
+// 24 px on the right for the chevron.
+static const int PILL_TEXT_LEFT = 8;       // where the text area starts (was the 1 px border)
+static const int PILL_BUTTON_WIDTH = 24;   // the chevron's area at the right end
+
+// Says whether this combo box is drawn as a pill. Inputs: the control, and whether it is a
+// "plain" generic combo (the caller's own members: a 1 px border drawn by wx, the drop button on
+// the right, no custom button bitmap and no separate button window). Result: true only for a
+// plain, read-only combo with no text field (an editable combo keeps its page-element text
+// field, which has its own CSS look) that is not inside a wxGrid: a grid cell editor fills its
+// square cell and stays square. Changes nothing. Used by combocmn.cpp and src/generic/combog.cpp.
+bool wxWasmComboIsPill(const wxComboCtrlBase* combo, bool plainCombo)
+{
+    if ( !plainCombo || !combo->HasFlag(wxCB_READONLY) || combo->GetTextCtrl() )
+        return false;
+
+    // Looked up by name, so this file does not need the grid library; NULL when no grid exists.
+    static wxClassInfo* const gridClass = wxClassInfo::FindClass(wxS("wxGrid"));
+
+    if ( gridClass )
+    {
+        for ( const wxWindow* w = combo->GetParent(); w; w = w->GetParent() )
+        {
+            if ( w->IsKindOf(gridClass) )
+                return false;
+
+            if ( w->IsTopLevel() )
+                break;
+        }
+    }
+
+    return true;
+}
+
+// The members that make a combo "plain" (see wxWasmComboIsPill), as one expression for the
+// methods of wxComboCtrlBase below.
+#define wxWASM_COMBO_IS_PILL() \
+    wxWasmComboIsPill(this, m_widthCustomBorder > 0 && m_btnSide == wxRIGHT && \
+                            !m_bmpNormal.IsOk() && !m_btn)
+#endif // __EMSCRIPTEN__
+
 #if wxUSE_POPUPWIN
     #include "wx/popupwin.h"
 
@@ -1133,6 +1185,26 @@ void wxComboCtrlBase::CalculateAreas( int btnWidth )
     m_tcArea.width = sz.x - butAreaWid - (m_widthCustomBorder*2) - FOCUS_RING;
     m_tcArea.height = sz.y - ((m_widthCustomBorder+FOCUS_RING)*2);
 
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: A20: a pill's areas (see wxWasmComboIsPill above). The button area is the whole
+    // height of the right end, where the chevron is drawn and where a click opens the list; the
+    // text area starts PILL_TEXT_LEFT in and ends at the button area. Clicks anywhere on a
+    // read-only combo still open its list, as before.
+    if ( wxWASM_COMBO_IS_PILL() )
+    {
+        const int pillButton = wxMax(FromDIP(PILL_BUTTON_WIDTH), m_btnArea.width);
+        const int pillLeft = FromDIP(PILL_TEXT_LEFT);
+
+        m_btnArea.x = sz.x - pillButton;
+        m_btnArea.y = 0;
+        m_btnArea.width = pillButton;
+        m_btnArea.height = sz.y;
+
+        m_tcArea.x = pillLeft;
+        m_tcArea.width = wxMax(0, sz.x - pillLeft - pillButton);
+    }
+#endif
+
 /*
     if ( m_mainWindow )
     {
@@ -1297,6 +1369,14 @@ wxSize wxComboCtrlBase::DoGetSizeFromTextSize(int xlen, int ylen) const
 
     // Calculate width
     int fwid = GetNativeTextIndent() + xlen + FOCUS_RING + COMBO_MARGIN + m_btnArea.width;
+
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: A20: a pill is wider by its text inset and its chevron area (CalculateAreas), so
+    // its longest item still fits without being cut off.
+    if ( wxWASM_COMBO_IS_PILL() )
+        fwid = FromDIP(PILL_TEXT_LEFT) + GetNativeTextIndent() + xlen + COMBO_MARGIN +
+               FromDIP(PILL_BUTTON_WIDTH);
+#endif
 
     // Add the margins we have previously set
     wxPoint marg( GetMargins() );
@@ -1524,6 +1604,22 @@ void wxComboCtrlBase::PrepareBackground( wxDC& dc, const wxRect& rect, int flags
         bgCol = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
 #endif
     }
+
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: A20: the control part of a pill (not a row of its list) has no square fill: no
+    // highlight bar when it has the focus (the pill's outline turns the focus colour instead,
+    // combog.cpp) and no rectangle in the combo's background colour (its parent's colour, set by
+    // OnThemeChange, or the disabled fill); the pill's face (painted by combog.cpp) shows through.
+    // The text keeps the colour chosen above, except that the highlight text colour (white)
+    // would be unreadable on the face.
+    if ( !(flags & wxCONTROL_ISSUBMENU) && wxWASM_COMBO_IS_PILL() )
+    {
+        doDrawSelRect = false;
+        if ( isEnabled && doDrawFocusRect )
+            fgCol = m_hasFgCol ? GetForegroundColour()
+                               : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+    }
+#endif
 
     dc.SetTextForeground( fgCol );
     dc.SetBrush( bgCol );

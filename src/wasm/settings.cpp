@@ -59,10 +59,12 @@ extern "C" bool wxWasmGetDarkAppearance()
 
 // KICLOUD: the editor's light and warm dark chrome (B1.20, IDEAS.md #8): the dashboard's "Soft"
 // colours, replacing the classic grey light table and the cool blue-grey dark one. Every value is
-// one of web/live/theme/tokens.css (the trailing "// light|dark --token" notes are checked by
-// tests/lint/theme-tokens.mjs). "Fields" (WINDOW) and dialogs/panels (BTNFACE) take the editor's
-// surface colour; KiCad's toolbars and dock background take the panel colour from its own art
-// providers (common/widgets/wx_aui_art_providers.cpp).
+// one of web/editor/appearance/theme/tokens.css (the trailing "// light|dark --token" notes are
+// checked by tests/features/appearance.test.ts, "the colours annotated with a token in the native
+// colour tables have that token's value"). "Fields" (WINDOW) and dialogs/panels (BTNFACE) take the
+// editor's surface colour; KiCad's toolbars and dock background (MENUBAR, read by its own art
+// providers in common/widgets/wx_aui_art_providers.cpp) take the panel colour in dark and, since
+// A19, the surface colour (white) in light.
 wxColour wxSystemSettingsNative::GetColour(wxSystemColour index)
 {
     // Default window backgrounds come from wxSYS_COLOUR_BTNFACE — without
@@ -141,11 +143,17 @@ wxColour wxSystemSettingsNative::GetColour(wxSystemColour index)
         case wxSYS_COLOUR_3DLIGHT:
             return wxColour(0xff, 0xff, 0xff); // light --surface
 
+        // KICLOUD: A19 (docs/patches.md): in light the toolbars, the menu bar, the gaps between
+        // KiCad's panels (the dock), the status bar and the scroll bars are white too, like the
+        // fields and dialogs above (Ahmad, 2026-10-07: "something better than the off white
+        // background ... maybe just make it all white"). They were the light panel colour
+        // (--panel, #efece6). The cards on them still read as cards by their 1 px outline (KiCad's
+        // common/widgets/wx_aui_art_providers.cpp). The dark theme is unchanged.
         case wxSYS_COLOUR_MENUBAR:
         case wxSYS_COLOUR_SCROLLBAR:
         case wxSYS_COLOUR_ACTIVEBORDER:
         case wxSYS_COLOUR_INACTIVEBORDER:
-            return wxColour(0xef, 0xec, 0xe6); // light --panel
+            return wxColour(0xff, 0xff, 0xff); // light --surface
 
         case wxSYS_COLOUR_APPWORKSPACE:
         case wxSYS_COLOUR_DESKTOP:

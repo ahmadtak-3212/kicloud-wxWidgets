@@ -87,6 +87,83 @@
 // implementation
 // ============================================================================
 
+#ifdef __EMSCRIPTEN__
+// KICLOUD: A20 (docs/patches.md): the browser editor's pill-shaped combo boxes. Whether a combo is
+// a pill, and the room its areas leave, is decided in src/common/combocmn.cpp
+// (wxWasmComboIsPill, wxComboCtrlBase::CalculateAreas); the painting is below.
+extern bool wxWasmComboIsPill(const wxComboCtrlBase* combo, bool plainCombo);
+
+namespace
+{
+
+// The colour behind a pill, which shows at its four rounded corners. Input: the combo. Result:
+// the colour its parent window is painted in. A wxAuiToolBar (KiCad's top toolbars) is painted
+// by its art provider in wxSYS_COLOUR_MENUBAR (KiCad's common/widgets/wx_aui_art_providers.cpp,
+// the browser build) while its own background colour attribute stays the default, so the
+// toolbar's case is taken from the system colour table. Changes nothing.
+wxColour PillCornerColour(const wxWindow* combo)
+{
+    const wxWindow* parent = combo->GetParent();
+    static wxClassInfo* const auiToolBarClass = wxClassInfo::FindClass(wxS("wxAuiToolBar"));
+
+    if ( parent && auiToolBarClass && parent->IsKindOf(auiToolBarClass) )
+        return wxSystemSettings::GetColour(wxSYS_COLOUR_MENUBAR);
+
+    return parent ? parent->GetBackgroundColour()
+                  : wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
+}
+
+// Paints the pill: the whole control in the corner colour, then a rounded rectangle with fully
+// round ends (radius = half the height) with a 1 px outline, then the chevron at the right end.
+// It matches the <select> pill of web/editor/appearance/theme/editor-chrome.css: the face is the
+// field colour (wxSYS_COLOUR_WINDOW, the CSS --kc-field), the outline the strong line colour
+// (wxSYS_COLOUR_BTNSHADOW, --line-strong), and the chevron a 10 x 6 px "v" whose right end is
+// 9 px from the pill's right edge, drawn in the muted text colour (wxSYS_COLOUR_GRAYTEXT,
+// --muted). When the combo has the keyboard focus the outline takes the focus colour (--focus:
+// wxSYS_COLOUR_HIGHLIGHT in light, wxSYS_COLOUR_HOTLIGHT in dark), as a focused <select> does.
+// Inputs: the DC to paint on, the control's whole client rectangle, the face colour and whether
+// the outline shows the focus. The outline is painted as two filled shapes, not a stroked one,
+// so it lands on whole pixels (a 1 px stroke on a whole-pixel edge is blurred over 2 px by the
+// page's canvas). Changes only the DC's pen and brush.
+void DrawPill(wxWindow* combo, wxDC& dc, const wxRect& rect, const wxColour& face, bool focused)
+{
+    const wxColour line = focused
+        ? wxSystemSettings::GetColour(wxSystemSettings::GetAppearance().IsDark()
+                                          ? wxSYS_COLOUR_HOTLIGHT : wxSYS_COLOUR_HIGHLIGHT)
+        : wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.SetBrush(PillCornerColour(combo));
+    dc.DrawRectangle(rect);
+
+    if ( rect.width < 4 || rect.height < 4 )
+        return;
+
+    dc.SetBrush(line);
+    dc.DrawRoundedRectangle(rect, rect.height / 2.0);
+    wxRect inner(rect);
+    inner.Deflate(1);
+    dc.SetBrush(face);
+    dc.DrawRoundedRectangle(inner, inner.height / 2.0);
+
+    // the chevron: (1,1) -> (5,5) -> (9,1) in a 10 x 6 box, as the CSS's SVG path "M1 1l4 4 4-4"
+    const int boxLeft = rect.GetRight() + 1 - combo->FromDIP(9) - combo->FromDIP(10);
+    const int boxTop = rect.y + (rect.height - combo->FromDIP(6)) / 2;
+    const int u = combo->FromDIP(1);
+    const wxPoint chevron[3] = { wxPoint(boxLeft + u, boxTop + u),
+                                 wxPoint(boxLeft + 5 * u, boxTop + 5 * u),
+                                 wxPoint(boxLeft + 9 * u, boxTop + u) };
+    wxPen pen(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT), combo->FromDIP(2));
+    pen.SetCap(wxCAP_ROUND);
+    pen.SetJoin(wxJOIN_ROUND);
+    dc.SetPen(pen);
+    dc.DrawLines(3, chevron);
+    dc.SetPen(*wxTRANSPARENT_PEN);
+}
+
+} // anonymous namespace
+#endif // __EMSCRIPTEN__
+
 // Only implement if no native or it wasn't fully featured
 #ifndef wxCOMBOCONTROL_FULLY_FEATURED
 
@@ -248,8 +325,22 @@ void wxGenericComboCtrl::OnPaintEvent( wxPaintEvent& WXUNUSED(event) )
     wxRect tcRect = m_tcArea;
     wxRect fullRect(0, 0, sz.x, sz.y);
 
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: A20: a pill (see DrawPill above) replaces the square border, the background clear
+    // and the square drop button below. Its face is always the field colour, like a <select>'s:
+    // the combo's own background colour is not used, because OnThemeChange() (combocmn.cpp) sets
+    // it to its parent's colour on every theme change.
+    const bool pill = wxWasmComboIsPill(this, m_widthCustomBorder > 0 && m_btnSide == wxRIGHT &&
+                                              !m_bmpNormal.IsOk() && !m_btn);
+    if ( pill )
+        DrawPill(this, dc, fullRect, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW),
+                 ShouldDrawFocus());
+#else
+    const bool pill = false;
+#endif
+
     // artificial simple border
-    if ( m_widthCustomBorder )
+    if ( m_widthCustomBorder && !pill )
     {
         int customBorder = m_widthCustomBorder;
 
@@ -293,7 +384,7 @@ void wxGenericComboCtrl::OnPaintEvent( wxPaintEvent& WXUNUSED(event) )
     }
 
     // Clear the main background if the system doesn't do it by itself
-    if ( !HasTransparentBackground() &&
+    if ( !pill && !HasTransparentBackground() &&
          (tcRect.x > 0 || tcRect.y > 0) )
     {
         wxColour winCol = GetParent()->GetBackgroundColour();
@@ -303,7 +394,7 @@ void wxGenericComboCtrl::OnPaintEvent( wxPaintEvent& WXUNUSED(event) )
         dc.DrawRectangle(fullRect);
     }
 
-    if ( !m_btn )
+    if ( !m_btn && !pill )
     {
         // Standard button rendering
         DrawButton(dc, butRect);
@@ -314,11 +405,15 @@ void wxGenericComboCtrl::OnPaintEvent( wxPaintEvent& WXUNUSED(event) )
     {
         wxASSERT( m_widthCustomPaint >= 0 );
 
-        // Clear the text-control area background
-        wxColour tcCol = GetBackgroundColour();
-        dc.SetBrush(tcCol);
-        dc.SetPen(tcCol);
-        dc.DrawRectangle(tcRect);
+        // Clear the text-control area background (KICLOUD: A20, a pill's face is already
+        // painted, and a rectangle here would cut into its rounded outline)
+        if ( !pill )
+        {
+            wxColour tcCol = GetBackgroundColour();
+            dc.SetBrush(tcCol);
+            dc.SetPen(tcCol);
+            dc.DrawRectangle(tcRect);
+        }
 
         // this is intentionally here to allow drawn rectangle's
         // right edge to be hidden
