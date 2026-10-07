@@ -83,7 +83,6 @@ static bool wxTreeIsNavList(const wxGenericTreeCtrl* tree);
 static bool wxTreeIsNavGroup(const wxGenericTreeCtrl* tree, const wxGenericTreeItem* item);
 static wxFont wxTreeNavGroupFont(const wxFont& normalFont);
 
-static const int NAV_ROW_EXTRA_HEIGHT = 6;      // px added to each row: room around the text
 static const int NAV_ROW_INSET = 4;             // px between a selected row and the list's sides
 static const double NAV_ROW_RADIUS = 8;         // px, the selected row's corners
 static const double NAV_GROUP_POINT_SIZE = 8.25; // 11 CSS px (font.cpp FontPixelSize)
@@ -963,11 +962,6 @@ wxGenericTreeItem::DoCalculateSize(wxGenericTreeCtrl* control,
         m_height += 2;            // at least 2 pixels
     else
         m_height += m_height / 10;   // otherwise 10% extra spacing
-
-#ifdef wxTREE_NAV_LOOK
-    if ( wxTreeIsNavList(control) )
-        m_height += NAV_ROW_EXTRA_HEIGHT;   // KICLOUD: LOOK.6, navigation rows
-#endif
 
     if (m_height > control->m_lineHeight)
         control->m_lineHeight = m_height;
@@ -2539,6 +2533,15 @@ void wxGenericTreeCtrl::CalculateLineHeight()
             if (height > m_lineHeight) m_lineHeight = height;
         }
     }
+
+#ifdef wxTREE_NAV_LOOK
+    // KICLOUD: LOOK.6: a navigation list's rows are the text height + 4 px, without the 2 px
+    // added below: the taller line height of the editor's font (18 px for 13 px text, font.cpp)
+    // keeps them as tall as before (22 px), so a long page list (Board Setup's 25 rows) still
+    // fits a 900 px window without scrolling
+    if ( wxTreeIsNavList(this) )
+        return;
+#endif
 
     if (m_lineHeight < 30)
         m_lineHeight += 2;                 // at least 2 pixels
