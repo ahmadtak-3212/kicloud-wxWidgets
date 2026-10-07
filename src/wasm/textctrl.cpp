@@ -10,8 +10,26 @@
 #if wxUSE_TEXTCTRL
 
 #include "wx/textctrl.h"
+#include "wx/toplevel.h"     // KICLOUD: LOOK.6
 
 #include "wx/wasm/private/dom.h"
+
+// KICLOUD: LOOK.6 (docs/patches.md): is this control part of a dialog's form, so that it gets
+// the dashboard's roomy form-control size (wx-dom.js wxDomSetRoomy: at least 30 px tall, 10-12 px
+// of horizontal padding)? True for a control of a dialog or floating window (a top-level window
+// that is not the main frame or a page frame, the editor tabs: their panels and toolbar rows stay
+// as they are). False for a borderless control: a grid's or list's cell editor, sized to its
+// cell by its owner. Shared by wxTextCtrl (here), wxButton (button.cpp) and wxChoice/wxComboBox
+// (choice.cpp), which declare it themselves (the port's shared headers are outside this change).
+bool wxWasmIsDialogFormControl(const wxWindow* win)
+{
+    if ( !win || (win->GetWindowStyleFlag() & wxBORDER_MASK) == wxBORDER_NONE )
+        return false;
+
+    const wxTopLevelWindow* tlw =
+        wxDynamicCast(wxGetTopLevelParent(const_cast<wxWindow*>(win)), wxTopLevelWindow);
+    return tlw && !tlw->IsMainFrame() && !tlw->IsPageFrame();
+}
 
 wxTextCtrl::wxTextCtrl()
 {
@@ -46,6 +64,10 @@ bool wxTextCtrl::Create(wxWindow *parent, wxWindowID id,
         WasmCreateDomNode("input", "password");
     else
         WasmCreateDomNode("input", "text");
+
+    // KICLOUD: LOOK.6: a one-line field of a dialog gets the roomy form size (see above)
+    if ( WasmGetDomId() && !(style & wxTE_MULTILINE) && wxWasmIsDialogFormControl(this) )
+        EM_ASM({ if (typeof wxDomSetRoomy === 'function') wxDomSetRoomy($0); }, WasmGetDomId());
 
     // set the initial contents without generating a wxEVT_TEXT event
     ChangeValue(value);

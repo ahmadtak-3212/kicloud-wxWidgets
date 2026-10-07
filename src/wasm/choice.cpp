@@ -11,9 +11,16 @@
 
 #include "wx/choice.h"
 
+#include "wx/utils.h"         // KICLOUD: LOOK.6, wxMax
 #include "wx/wasm/private/dom.h"
 
 #define INVALID_INDEX_MESSAGE wxT("invalid choice index")
+
+// KICLOUD: LOOK.6: defined in textctrl.cpp (a dialog's form control gets the roomy size)
+extern bool wxWasmIsDialogFormControl(const wxWindow* win);
+
+// KICLOUD: LOOK.6: the dashboard's form control height, px
+static const int FORM_CONTROL_HEIGHT = 30;
 
 wxChoice::wxChoice() :
     m_selection(wxNOT_FOUND)
@@ -77,6 +84,11 @@ bool wxChoice::Create(wxWindow *parent, wxWindowID id,
 
     WasmCreateDomNode(WasmDomNodeType());
 
+    // KICLOUD: LOOK.6: a dialog's choice or combo box gets the roomy form size (wx-dom.js
+    // wxDomSetRoomy); wxComboBox::Create comes through here too
+    if ( WasmGetDomId() && wxWasmIsDialogFormControl(this) )
+        EM_ASM({ if (typeof wxDomSetRoomy === 'function') wxDomSetRoomy($0); }, WasmGetDomId());
+
     // Append() goes through DoInsertItems() which pushes the items to the
     // DOM <select>.
     if (n > 0)
@@ -97,7 +109,11 @@ wxSize wxChoice::DoGetBestSize() const
     // control to an unusable sliver (collapsed toolbar dropdowns, overlapping
     // stacked combos). Floor the height to a font-derived control height,
     // which is correct regardless of when best size is measured.
-    const int minHeight = GetCharHeight() + 8;
+    // KICLOUD: LOOK.6: in a dialog, at least the dashboard's form control height (the floor the
+    // DOM measure applies too, wx-dom.js wxDomIntrinsicSize)
+    int minHeight = GetCharHeight() + 8;
+    if (wxWasmIsDialogFormControl(this))
+        minHeight = wxMax(minHeight, FORM_CONTROL_HEIGHT);
     if (best.y < minHeight)
         best.y = minHeight;
 

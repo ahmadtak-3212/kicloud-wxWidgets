@@ -10,12 +10,14 @@
 
 #include "wx/font.h"
 #include "wx/fontutil.h"
+#include "wx/math.h"      // KICLOUD: LOOK.6, wxRound
 
 #ifndef WX_PRECOMP
 #endif // WX_PRECOMP
 
 #include <emscripten.h>
 
+// 10 pt, drawn at 13 CSS px (see FontPixelSize below): the dashboard's 13 px text.
 static const float DEFAULT_POINT_SIZE = 10;
 
 namespace
@@ -41,12 +43,21 @@ const char* GetStyleString(wxFontStyle style)
     }
 }
 
+// KICLOUD: LOOK.6 (docs/patches.md): the default and Swiss (sans-serif) families are the
+// dashboard's system font stack, the --font token of web/editor/appearance/theme/tokens.css. The
+// port asked for "Open Sans", which no page loads, so the browser fell back to its own sans-serif
+// (DejaVu Sans on Linux). Measuring (GetTextExtent) and drawing (wxDC, DOM controls) both use the
+// string ToString() builds from this, so dialogs lay out for the font they show.
+static const char* const SYSTEM_UI_STACK =
+    "system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif";
+
+// The CSS font-family list for a wx font family. Only DEFAULT and SWISS changed (LOOK.6).
 const char* GetFamilyString(wxFontFamily family)
 {
     switch (family)
     {
         case wxFONTFAMILY_DEFAULT:
-            return "Open Sans, sans-serif";
+            return SYSTEM_UI_STACK;    // KICLOUD: LOOK.6 (was "Open Sans, sans-serif")
             break;
         case wxFONTFAMILY_DECORATIVE:
             return "cursive";
@@ -58,7 +69,7 @@ const char* GetFamilyString(wxFontFamily family)
             return "cursive";
             break;
         case wxFONTFAMILY_SWISS:
-            return "Open Sans, sans-serif";
+            return SYSTEM_UI_STACK;    // KICLOUD: LOOK.6 (was "Open Sans, sans-serif")
             break;
         case wxFONTFAMILY_MODERN:
             return "monospace";
@@ -71,6 +82,19 @@ const char* GetFamilyString(wxFontFamily family)
             return "serif";
             break;
     }
+}
+
+// KICLOUD: LOOK.6 (docs/patches.md): the CSS pixel size a font is drawn at, a whole number:
+// round(points x 96/72). wx and KiCad think in points, and KiCad derives its control, info and
+// status fonts with integer point arithmetic (common/widgets/ui_common.cpp getGUIFont:
+// SetPointSize(GetPointSize() + n)). With whole pixels the default 10 pt is the dashboard's
+// 13 px, KiCad's "same size" control font lands on the same 13 px, and the browser reports whole
+// font-box metrics for the line height below. Input: the font's fractional point size. Result:
+// at least 1 px.
+int FontPixelSize(double pointSize)
+{
+    const int px = wxRound(pointSize * 96.0 / 72.0);
+    return px < 1 ? 1 : px;
 }
 
 } // anonymous namespace
@@ -223,10 +247,12 @@ wxString wxNativeFontInfo::ToString() const
                                                  GetFamilyString(GetFamily()));
         }
 
-        m_renderedString = wxString::Format(wxT("%s %d %fpt/1 %s"),
+        // KICLOUD: LOOK.6: the size in whole CSS px (FontPixelSize; was "%fpt"). This string
+        // is the CSS font the canvas measures and draws with and the DOM controls show.
+        m_renderedString = wxString::Format(wxT("%s %d %dpx/1 %s"),
                                             GetStyleString(GetStyle()),
                                             GetNumericWeight(),
-                                            GetFractionalPointSize(),
+                                            FontPixelSize(GetFractionalPointSize()),
                                             fontFaceAndFamily.utf8_str());
         m_isRendered = true;
     }
@@ -250,14 +276,28 @@ void wxFontRefData::GetTextExtent(const wxString &string,
         }, s, fontString);
     }
 
-    if (y != NULL)
+    // KICLOUD: LOOK.6 (docs/patches.md, FEATURE_LOOKS_SPIKES.md 0.6): the line height is the
+    // font's own box, ceil(fontBoundingBoxAscent + fontBoundingBoxDescent), measured once per
+    // font string by wx.js fontLineHeight (it was round(1.6 x points), 2 px short of the box of
+    // system-ui 13 px, so a control that clipped to its text rect cut the descenders of g, j, p,
+    // q, y). wxDC::DrawText (src/wasm/dc.cpp) puts the baseline at 5/6 of this height, so the
+    // descent reported is the part of the line below that baseline: wx code that aligns text on
+    // its baseline (wxHTML cells) then matches what is drawn. It was 0.
+    if (y != NULL || descent != NULL)
     {
-        *y = static_cast<int>(round(1.6 * m_nativeFontInfo.GetFractionalPointSize()));
-    }
+        const int lineHeight = EM_ASM_INT({
+            return fontLineHeight(UTF8ToString($0));
+        }, fontString);
 
-    if (descent != NULL)
-    {
-        *descent = 0;
+        if (y != NULL)
+        {
+            *y = lineHeight;
+        }
+
+        if (descent != NULL)
+        {
+            *descent = lineHeight - static_cast<int>(lineHeight * (5.0 / 6.0));
+        }
     }
 
     if (externalLeading != NULL)

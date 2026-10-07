@@ -36,6 +36,7 @@
 
 #ifdef __EMSCRIPTEN__
     #include "wx/wasm/elementtracker.h"
+    #include "wx/treebook.h"    // KICLOUD: LOOK.6, the navigation look of a treebook's list
 #endif
 #include "wx/imaglist.h"
 #include "wx/itemattr.h"
@@ -69,6 +70,24 @@ static const int MARGIN_BETWEEN_STATE_AND_IMAGE = 2;
 
 // the margin between the item image and the item text
 static const int MARGIN_BETWEEN_IMAGE_AND_TEXT = 4;
+
+#if defined(__EMSCRIPTEN__) && wxUSE_TREEBOOK
+// KICLOUD: LOOK.6 (docs/patches.md): the browser editor draws the page list of a wxTreebook
+// (KiCad's PAGED_DIALOG: Board Setup, Preferences, Schematic Setup) as the dashboard's left
+// navigation: a root-level page that has sub-pages is a group heading (small uppercase muted
+// text), and the selected page is an accent-soft row with rounded corners, without tree lines.
+// Every other tree control (KiCad's hierarchy pane, ...) is drawn as before. The functions are
+// defined after wxGenericTreeItem below.
+#define wxTREE_NAV_LOOK 1
+static bool wxTreeIsNavList(const wxGenericTreeCtrl* tree);
+static bool wxTreeIsNavGroup(const wxGenericTreeCtrl* tree, const wxGenericTreeItem* item);
+static wxFont wxTreeNavGroupFont(const wxFont& normalFont);
+
+static const int NAV_ROW_EXTRA_HEIGHT = 6;      // px added to each row: room around the text
+static const int NAV_ROW_INSET = 4;             // px between a selected row and the list's sides
+static const double NAV_ROW_RADIUS = 8;         // px, the selected row's corners
+static const double NAV_GROUP_POINT_SIZE = 8.25; // 11 CSS px (font.cpp FontPixelSize)
+#endif
 
 // -----------------------------------------------------------------------------
 // private classes
@@ -232,6 +251,10 @@ public:
         wxItemAttr * const attr = GetAttributes();
         if ( attr && attr->HasFont() )
             font = attr->GetFont();
+#ifdef wxTREE_NAV_LOOK
+        else if ( wxTreeIsNavGroup(control, this) )   // KICLOUD: LOOK.6, a group heading
+            font = wxTreeNavGroupFont(control->m_normalFont);
+#endif
         else if ( IsBold() )
             font = control->m_boldFont;
         else
@@ -258,6 +281,19 @@ public:
     void CalculateSize(wxGenericTreeCtrl *control, wxDC& dc)
         { DoCalculateSize(control, dc, true /* dc uses normal font */); }
     void CalculateSize(wxGenericTreeCtrl *control);
+
+    // KICLOUD: LOOK.6: the text as drawn and measured: a navigation group heading's in upper
+    // case (wxTREE_NAV_LOOK), every other item's as set
+    wxString GetDisplayText(const wxGenericTreeCtrl *control) const
+    {
+#ifdef wxTREE_NAV_LOOK
+        if ( wxTreeIsNavGroup(control, this) )
+            return m_text.Upper();
+#else
+        wxUnusedVar(control);
+#endif
+        return m_text;
+    }
 
     void GetSize( int &x, int &y, const wxGenericTreeCtrl* );
 
@@ -892,7 +928,7 @@ wxGenericTreeItem::DoCalculateSize(wxGenericTreeCtrl* control,
            fontChanged = false;
         }
 
-        dc.GetTextExtent( GetText(), &m_widthText, &m_heightText );
+        dc.GetTextExtent( GetDisplayText(control), &m_widthText, &m_heightText );   // KICLOUD: LOOK.6
 
         // restore normal font if the DC used it previously and we changed it
         if ( fontChanged )
@@ -928,6 +964,11 @@ wxGenericTreeItem::DoCalculateSize(wxGenericTreeCtrl* control,
     else
         m_height += m_height / 10;   // otherwise 10% extra spacing
 
+#ifdef wxTREE_NAV_LOOK
+    if ( wxTreeIsNavList(control) )
+        m_height += NAV_ROW_EXTRA_HEIGHT;   // KICLOUD: LOOK.6, navigation rows
+#endif
+
     if (m_height > control->m_lineHeight)
         control->m_lineHeight = m_height;
 
@@ -952,6 +993,33 @@ void wxGenericTreeItem::RecursiveResetTextSize()
     for (size_t i = 0; i < count; i++ )
         m_children[i]->RecursiveResetTextSize();
 }
+
+#ifdef wxTREE_NAV_LOOK
+// KICLOUD: LOOK.6: is this tree the page list of a wxTreebook (wxTreebook creates its tree as
+// its own child)? Only those are drawn as a navigation list.
+static bool wxTreeIsNavList(const wxGenericTreeCtrl* tree)
+{
+    return tree && wxDynamicCast(tree->GetParent(), wxTreebook) != NULL;
+}
+
+// KICLOUD: LOOK.6: is this item a group heading of a navigation list: a root-level page (the
+// treebook hides the tree's root) that has sub-pages? KiCad's group pages ("Board Stackup",
+// "Design Rules", "Schematic Editor") are empty panels whose sub-pages hold the settings.
+static bool wxTreeIsNavGroup(const wxGenericTreeCtrl* tree, const wxGenericTreeItem* item)
+{
+    return item && item->HasChildren() && item->GetParent() && !item->GetParent()->GetParent()
+           && wxTreeIsNavList(tree);
+}
+
+// KICLOUD: LOOK.6: a group heading's font: the list's own font at 11 px, semibold.
+static wxFont wxTreeNavGroupFont(const wxFont& normalFont)
+{
+    wxFont font(normalFont);
+    font.SetFractionalPointSize(NAV_GROUP_POINT_SIZE);
+    font.SetWeight(wxFONTWEIGHT_SEMIBOLD);
+    return font;
+}
+#endif // wxTREE_NAV_LOOK
 
 // -----------------------------------------------------------------------------
 // wxGenericTreeCtrl implementation
@@ -2625,6 +2693,26 @@ void wxGenericTreeCtrl::PaintItem(wxGenericTreeItem *item, wxDC& dc)
 
     int offset = HasFlag(wxTR_ROW_LINES) ? 1 : 0;
 
+#ifdef wxTREE_NAV_LOOK
+    // KICLOUD: LOOK.6: in a navigation list only the selected row has a background: the
+    // accent-soft colour (wxSYS_COLOUR_MENUHILIGHT, the token --accent-soft) across the list's
+    // width, with rounded corners. The rest of the list keeps the control's background.
+    const bool navList = wxTreeIsNavList(this);
+    if ( navList )
+    {
+        if ( item->IsSelected() )
+        {
+            int w, h;
+            GetVirtualSize(&w, &h);
+            dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_MENUHILIGHT)));
+            dc.SetPen(*wxTRANSPARENT_PEN);
+            dc.DrawRoundedRectangle(NAV_ROW_INSET, item->GetY() + 1,
+                                    wxMax(w - 2 * NAV_ROW_INSET, 0), total_h - 2,
+                                    NAV_ROW_RADIUS);
+        }
+    }
+    else
+#endif
     if ( HasFlag(wxTR_FULL_ROW_HIGHLIGHT) )
     {
         int x, w, h;
@@ -2723,7 +2811,7 @@ void wxGenericTreeCtrl::PaintItem(wxGenericTreeItem *item, wxDC& dc)
 
     dc.SetBackgroundMode(wxBRUSHSTYLE_TRANSPARENT);
     int extraH = (total_h > text_h) ? (total_h - text_h)/2 : 0;
-    dc.DrawText( item->GetText(),
+    dc.DrawText( item->GetDisplayText(this),   // KICLOUD: LOOK.6 (was GetText())
                  (wxCoord)(state_w + image_w + item->GetX()),
                  (wxCoord)(item->GetY() + extraH));
 
@@ -2790,8 +2878,12 @@ wxGenericTreeCtrl::PaintLevel(wxGenericTreeItem *item,
                 PaintLevel(children[n], dc, 1, y);
             } while (++n < count);
 
-            if ( !HasFlag(wxTR_NO_LINES) && HasFlag(wxTR_LINES_AT_ROOT)
-                    && count > 0 )
+            bool rootLines = !HasFlag(wxTR_NO_LINES) && HasFlag(wxTR_LINES_AT_ROOT);
+#ifdef wxTREE_NAV_LOOK
+            if ( wxTreeIsNavList(this) )
+                rootLines = false;   // KICLOUD: LOOK.6, a navigation list has no tree lines
+#endif
+            if ( rootLines && count > 0 )
             {
                 // draw line down to last child
                 origY += GetLineHeight(children[0])>>1;
@@ -2822,6 +2914,12 @@ wxGenericTreeCtrl::PaintLevel(wxGenericTreeItem *item,
             (item->IsSelected() && m_hasFocus) ? wxBLACK_PEN :
 #endif // !__WXMAC__
             wxTRANSPARENT_PEN;
+#ifdef wxTREE_NAV_LOOK
+        // KICLOUD: LOOK.6: a navigation list draws no outlines (PaintItem draws its rows)
+        const bool navList = wxTreeIsNavList(this);
+        if ( navList )
+            pen = wxTRANSPARENT_PEN;
+#endif
 
         wxColour colText;
         if ( item->IsSelected() )
@@ -2843,6 +2941,18 @@ wxGenericTreeCtrl::PaintLevel(wxGenericTreeItem *item,
             else
                 colText = GetForegroundColour();
         }
+#ifdef wxTREE_NAV_LOOK
+        // KICLOUD: LOOK.6: in a navigation list the selected row's text is the accent
+        // (wxSYS_COLOUR_HOTLIGHT, --accent) on its accent-soft row, and a group heading is muted
+        // (wxSYS_COLOUR_GRAYTEXT, --muted)
+        if ( navList )
+        {
+            if ( item->IsSelected() )
+                colText = wxSystemSettings::GetColour(wxSYS_COLOUR_HOTLIGHT);
+            else if ( wxTreeIsNavGroup(this, item) )
+                colText = wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT);
+        }
+#endif
 
         // prepare to draw
         dc.SetTextForeground(colText);
@@ -2880,7 +2990,12 @@ wxGenericTreeCtrl::PaintLevel(wxGenericTreeItem *item,
         dc.SetPen(m_dottedPen);
         dc.SetTextForeground(*wxBLACK);
 
-        if ( !HasFlag(wxTR_NO_LINES) )
+        bool drawLines = !HasFlag(wxTR_NO_LINES);
+#ifdef wxTREE_NAV_LOOK
+        if ( navList )
+            drawLines = false;   // KICLOUD: LOOK.6, a navigation list has no tree lines
+#endif
+        if ( drawLines )
         {
             // draw the horizontal line here
             int x_start = x;
@@ -2947,7 +3062,12 @@ wxGenericTreeCtrl::PaintLevel(wxGenericTreeItem *item,
                 PaintLevel(children[n], dc, level, y);
             } while (++n < count);
 
-            if (!HasFlag(wxTR_NO_LINES) && count > 0)
+            bool drawLines = !HasFlag(wxTR_NO_LINES);
+#ifdef wxTREE_NAV_LOOK
+            if ( wxTreeIsNavList(this) )
+                drawLines = false;   // KICLOUD: LOOK.6, a navigation list has no tree lines
+#endif
+            if (drawLines && count > 0)
             {
                 // draw line down to last child
                 oldY += GetLineHeight(children[n-1])>>1;

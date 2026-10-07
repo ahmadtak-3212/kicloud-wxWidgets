@@ -104,6 +104,11 @@ public:
     // Override size and visibility handling to update the canvas element
     virtual bool Show(bool show = true) wxOVERRIDE;
 
+    // KICLOUD: A10 (docs/patches.md): the browser's real device pixel ratio (1.25, 1.5, ...),
+    // not the 1x/2x scale the rest of the port uses, so KiCad's GAL (HIDPI_GL_CANVAS) renders
+    // one drawing pixel per device pixel. See glcanvas.cpp.
+    virtual double GetDPIScaleFactor() const wxOVERRIDE;
+
 protected:
     void Init();
 
@@ -117,6 +122,10 @@ protected:
     // Convert wxGL attributes to Emscripten WebGL context attributes
     static void ConvertWXAttrsToWebGL(const wxGLAttributes& dispAttrs,
                                       EmscriptenWebGLContextAttributes& attrs);
+
+    // KICLOUD: A10: place and size the canvas element from this window's screen rect, with a
+    // backing store of whole device pixels (glcanvas.cpp)
+    void SyncCanvasElement();
 
 private:
     std::string m_canvasTarget;  // Canvas element selector (e.g., "#window-123 canvas")

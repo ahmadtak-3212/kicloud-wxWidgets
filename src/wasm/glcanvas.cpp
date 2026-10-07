@@ -17,6 +17,7 @@
 
 #include "wx/glcanvas.h"
 #include "wx/toplevel.h"     // KICLOUD: B1.6d
+#include "wx/gdicmn.h"       // KICLOUD: A10, wxDisplayScaleFactor
 
 #ifndef WX_PRECOMP
     #include "wx/log.h"
@@ -408,11 +409,7 @@ bool wxGLCanvas::Create(wxWindow *parent,
     }
 
     // Position the GL canvas element to match this window's screen position
-    wxPoint screenPos = GetScreenPosition();
-    wxSize clientSize = GetClientSize();
-    EM_ASM({
-        setGLCanvasRect($0, $1, $2, $3, $4);
-    }, m_cssId, screenPos.x, screenPos.y, clientSize.GetWidth(), clientSize.GetHeight());
+    SyncCanvasElement();    // KICLOUD: A10
 
     // Set canvas selector to point to our dedicated GL canvas element
     char selectorBuf[64];
@@ -479,13 +476,46 @@ void wxGLCanvas::DoSetSize(int x, int y, int width, int height, int sizeFlags)
 
     // Update the GL canvas element position to match the window
     if ( m_cssId != wxID_NONE )
-    {
-        wxPoint screenPos = GetScreenPosition();
-        wxSize clientSize = GetClientSize();
-        EM_ASM({
-            setGLCanvasRect($0, $1, $2, $3, $4);
-        }, m_cssId, screenPos.x, screenPos.y, clientSize.GetWidth(), clientSize.GetHeight());
-    }
+        SyncCanvasElement();    // KICLOUD: A10
+}
+
+// KICLOUD: A10 (docs/patches.md, docs/future-features/FEATURE_LOOKS.md R1): the scale KiCad's
+// GAL draws this canvas at. The rest of the port reports only 1x or 2x (src/wasm/display.cpp:
+// window.devicePixelRatio >= 1.5 ? 2 : 1), which is right for its 2D canvases and bitmaps but
+// made the board blurry at a device pixel ratio of 1.25 or 1.5: KiCad drew at 1x or 2x and the
+// browser resampled the picture to the screen every frame. HIDPI_GL_CANVAS::GetScaleFactor()
+// (kicad/common/gal/hidpi_gl_canvas.cpp) asks this, so its framebuffer, viewport and mouse
+// mapping all use the real ratio. wxDisplayScaleFactor() is window.devicePixelRatio, refreshed
+// on every page resize (wxApp::HandleSizeEvent), which a browser zoom also sends. At a ratio of
+// 1 or 2 this is the value the port reported before, so those screens draw exactly as before.
+double wxGLCanvas::GetDPIScaleFactor() const
+{
+    return wxDisplayScaleFactor();
+}
+
+// KICLOUD: A10: places this canvas's own <canvas> element over the window and sizes its
+// backing store (wx.js setGLCanvasRect). The backing store is the size KiCad's GAL renders,
+// computed here with KiCad's own expression, the CSS client size times the scale truncated to
+// an int (HIDPI_GL_CANVAS::GetNativePixelSize: `size.x *= scaleFactor`), so the drawing buffer
+// is exactly what KiCad fills: one device pixel per drawn pixel, no resampling, no unpainted
+// edge. JS shows it at backing / scale CSS px (whole device pixels, at most one device pixel
+// smaller than the wx client size) and moves it by less than one device pixel so its corner sits
+// on a device pixel. Called at creation and on every size or position change (DoSetSize, and
+// wxWindowWasm::UpdateDomGeometryRecursive when an ancestor moves).
+void wxGLCanvas::SyncCanvasElement()
+{
+    const wxPoint screenPos = GetScreenPosition();
+    const wxSize clientSize = GetClientSize();
+    const double scale = GetDPIScaleFactor();
+
+    wxSize backing = clientSize;
+    backing.x *= scale;
+    backing.y *= scale;
+
+    EM_ASM({
+        setGLCanvasRect($0, $1, $2, $3, $4, $5, $6, $7);
+    }, m_cssId, screenPos.x, screenPos.y, clientSize.GetWidth(), clientSize.GetHeight(),
+       backing.x, backing.y, scale);
 }
 
 bool wxGLCanvas::Show(bool show)

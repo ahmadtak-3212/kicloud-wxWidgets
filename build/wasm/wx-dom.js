@@ -613,6 +613,65 @@
   window.wxDomSetText = function (domId, text) {
     var target = labels.get(domId) || controls.get(domId);
     if (target) target.textContent = text;
+    // KICLOUD: LOOK.6: a roomy button's padding depends on whether it shows text, and a label
+    // ending in ':' in a dialog is styled as a field label
+    var el = controls.get(domId);
+    if (el) {
+      applyRoomyPadding(el);
+      markFieldLabel(el, text);
+    }
+  };
+
+  // ========== Dialog form controls (KICLOUD: LOOK.6) ==========
+  //
+  // The dashboard's form look for KiCad's dialogs: buttons, one-line text fields and choices of
+  // a dialog or floating window are at least ROOMY_MIN_HEIGHT px tall, with 10-12 px of
+  // horizontal padding. The C++ side decides which controls these are (button.cpp,
+  // textctrl.cpp, choice.cpp: wxWasmIsDialogFormControl) and marks them with wxDomSetRoomy. The
+  // minimum height is applied to the measured best size only (wxDomIntrinsicSize), never as a
+  // CSS min-height: the sizer's final rect (wxDomSetRect) stays the element's real size, so a
+  // control KiCad sized smaller on purpose still matches wx's layout. The padding is real
+  // styling, so the measurement includes it.
+  var ROOMY_MIN_HEIGHT = 30;
+
+  // Is el a control of a dialog or floating window: a top-level window that is not a page frame
+  // (an editor tab) or a popup. The main frame's controls live in #main-window, which has no
+  // "toplevel" class.
+  function inFloatingWindow(el) {
+    var win = el.parentNode;
+    var cls = win && win.classList;
+    return !!cls && cls.contains('toplevel') && !cls.contains('page') && !cls.contains('popup');
+  }
+
+  // A roomy button's horizontal padding: 12 px around a text label; an image-only button
+  // (wxBitmapButton, KiCad's small grid buttons) keeps the port's 9 px.
+  function applyRoomyPadding(el) {
+    if (el.dataset.wxRoomy !== '1' || el.tagName !== 'BUTTON') return;
+    el.style.padding = (el.textContent || '').trim() ? '1px 12px' : '1px 9px';
+  }
+
+  // A static text in a dialog whose label ends in ':' ("Clearance:", "Net class:") names the
+  // field next to it, by KiCad's convention: the page's stylesheet shows it in the muted text
+  // colour (editor-chrome.css, data-wx-field-label). Colour only, so the measured size is
+  // unchanged. The DOM has no other way to know a static text labels a field.
+  function markFieldLabel(el, text) {
+    if (el.tagName !== 'SPAN' || el.dataset.wxPassive !== '1') return;
+    if (inFloatingWindow(el) && /:\s*$/.test(text || '')) el.dataset.wxFieldLabel = '1';
+    else delete el.dataset.wxFieldLabel;
+  }
+
+  // Called by C++ for a dialog form control (see above). One-line fields and choices get 10 px
+  // of horizontal padding (a page stylesheet may set its own: kicloud's editor-chrome.css does
+  // for [data-wx-roomy]); buttons get theirs from applyRoomyPadding.
+  window.wxDomSetRoomy = function (domId) {
+    var el = controls.get(domId);
+    if (!el) return;
+    el.dataset.wxRoomy = '1';
+    if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
+      el.style.paddingLeft = '10px';
+      el.style.paddingRight = '10px';
+    }
+    applyRoomyPadding(el);
   };
 
   window.wxDomSetValue = function (domId, value) {
@@ -1075,6 +1134,7 @@
     if (w > 0) { img.width = w; img.style.width = w + 'px'; }
     if (h > 0) { img.height = h; img.style.height = h + 'px'; }
     img.src = dataUrl;
+    applyRoomyPadding(el);   // KICLOUD: LOOK.6
   };
 
   window.wxDomSetEnabled = function (domId, enabled) {
@@ -1122,9 +1182,19 @@
     }
   };
 
+  // The control's CSS font: the wxFont's native description (src/wasm/font.cpp ToString).
+  // KICLOUD: LOOK.6: and its line height, the font's own box (wx.js fontLineHeight, the height
+  // GetTextExtent reports). The description carries "/1", a line box of one font size, which
+  // cut the descenders of labels (a control clips its overflow). The menu bar and the DOM tool
+  // bar keep "/1": they are the editor frame's rows, measured as they were.
   window.wxDomSetFont = function (domId, cssFont) {
     var el = controls.get(domId);
-    if (el && cssFont) el.style.font = cssFont;
+    if (el && cssFont) {
+      el.style.font = cssFont;
+      if (!el.dataset.wxMenuBar && !el.dataset.wxToolBar) {
+        el.style.lineHeight = fontLineHeight(cssFont) + 'px';
+      }
+    }
   };
 
   // KICLOUD: the dialog's default button (wxButton::SetDefault) is marked for the page's
@@ -1726,6 +1796,12 @@
 
     var w = Math.min(0xffff, Math.max(1, Math.ceil(rect.width)));
     var h = Math.min(0xffff, Math.max(1, Math.ceil(rect.height)));
+    // KICLOUD: LOOK.6: a dialog form control (wxDomSetRoomy) is at least ROOMY_MIN_HEIGHT tall,
+    // except an image-only button
+    if (el.dataset.wxRoomy === '1' &&
+        (el.tagName !== 'BUTTON' || (el.textContent || '').trim())) {
+      h = Math.max(h, ROOMY_MIN_HEIGHT);
+    }
     return (w << 16) | h;
   };
 

@@ -532,6 +532,15 @@ if (typeof navigator !== 'undefined') {
         '  outline: 1px solid #808080;',
         '  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.35);',
         '}',
+        // KICLOUD: LOOK.6 (docs/patches.md): dialogs and floating windows in the dashboard's
+        // shape: 24 px corners (.window clips its canvas and controls to them; the outline
+        // follows them) and a soft, wide shadow. A page frame (an editor tab, class "page")
+        // fills the page and keeps its square shape. A page stylesheet may restyle both
+        // (kicloud's editor-chrome.css does, with its tokens).
+        '.window.toplevel:not(.page) {',
+        '  border-radius: 24px;',
+        '  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);',
+        '}',
         // Input barrier for surfaces shadowed by a higher, overlapping
         // top-level window (see recomputeModalBarrier). Each dialog/main-frame
         // control is a real DOM element with pointer-events:auto, so without
@@ -576,12 +585,19 @@ if (typeof navigator !== 'undefined') {
         '  box-sizing: border-box;',
         '  background-color: #c8c8c8;',
         '  color: #282828;',
-        '  font: bold 12px sans-serif;',
+        // KICLOUD: LOOK.6: the dashboard's dialog title, 18 px at weight 700 in the system
+        // font (was bold 12px sans-serif). The bar stays TITLE_BAR_HEIGHT (22 px,
+        // src/wasm/toplevel.cpp) tall, so every control keeps its page position.
+        '  font: 700 18px system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;',
         '  user-select: none;',
         '}',
         '.window-titlebar-text {',
         '  flex: 1;',
-        '  padding: 0 6px;',
+        // KICLOUD: LOOK.6: clear of the 24 px corner; the text's line box (26 px) is taller
+        // than the bar, centred on it, so the clip that ellipsizes a long title never cuts the
+        // descenders of an 18 px title (its font box is about 25 px)
+        '  padding: 0 6px 0 18px;',
+        '  line-height: 26px;',
         '  overflow: hidden;',
         '  text-overflow: ellipsis;',
         '  white-space: nowrap;',
@@ -597,6 +613,8 @@ if (typeof navigator !== 'undefined') {
         '  color: #282828;',
         '  font: bold 15px sans-serif;',
         '  line-height: 1;',
+        // KICLOUD: LOOK.6: clear of the window's 24 px rounded corner, which clips it
+        '  margin-right: 12px;',
         '}',
         '.window-titlebar-close:hover {',
         '  background-color: #e25a5a;',
@@ -909,7 +927,11 @@ if (typeof navigator !== 'undefined') {
     var MIN_W = 120;    // minimum window size, px (flat floor)
     var MIN_H = 80;
     var EDGE = 6;       // edge-handle thickness, px
-    var CORNER = 12;    // corner-handle size, px
+    // KICLOUD: LOOK.6: .window clips its children, pointer hits included, to its rounded shape
+    // (24 px corners, the chrome sheet above), and a 12 px corner handle sat almost wholly
+    // outside it: it could not be grabbed. At 16 px its inner part is inside the shape (its
+    // centre is 23 px from the corner arc's centre), and it covers little of the dialog.
+    var CORNER = 16;    // corner-handle size, px (was 12)
 
     // Each handle: which window borders it moves (edges) + its inline box. e/w start
     // at barHeight so they never overlap the title bar; s/corners sit at the bottom.
@@ -1422,7 +1444,37 @@ if (typeof navigator !== 'undefined') {
     return id;
   };
 
-  var setGLCanvasRect = function (id, x, y, width, height) {
+  // KICLOUD: A10 (docs/patches.md): the offset of this document's viewport inside the top-level
+  // page, in CSS px. The editor runs in an iframe of the shell page, and a canvas lies on whole
+  // device pixels only if its position in the TOP page does. Same-origin frames are walked up;
+  // a cross-origin parent cannot be read, and the walk stops there (its offset then counts as 0).
+  var pageOffsetOfViewport = function () {
+    var left = 0;
+    var top = 0;
+    try {
+      var w = window;
+      while (w !== w.parent && w.frameElement) {
+        var r = w.frameElement.getBoundingClientRect();
+        left += r.left + w.frameElement.clientLeft;
+        top += r.top + w.frameElement.clientTop;
+        w = w.parent;
+      }
+    } catch (e) { /* a cross-origin parent: stop here */ }
+    return { left: left, top: top };
+  };
+
+  // Places a wxGLCanvas's <canvas> (src/wasm/glcanvas.cpp SyncCanvasElement) and sizes its
+  // drawing buffer. id: the GL canvas id from createGLCanvas. x, y, width, height: the wx
+  // window's screen rect (#canvas-relative CSS px).
+  // KICLOUD: A10: backingW, backingH and scale come from C++: the drawing buffer KiCad's GAL
+  // renders (client size x the device pixel ratio, truncated as KiCad truncates it) and that
+  // ratio. The element is shown at backing / scale CSS px, so each drawn pixel is one device
+  // pixel (no resampling: the board was blurry at a ratio of 1.25 or 1.5, when the port drew at
+  // 1x or 2x), and is shifted by under one device pixel so its top-left corner falls on a device
+  // pixel of the page. At a ratio of 1 or 2 both are what they were (backing = 1x or 2x the CSS
+  // size, already on whole pixels). Without the three values (an older caller) the port's 1x/2x
+  // scale is used as before.
+  var setGLCanvasRect = function (id, x, y, width, height, backingW, backingH, scale) {
     var canvas = glCanvasMap.get(id);
     if (!canvas) return;
 
@@ -1432,18 +1484,35 @@ if (typeof navigator !== 'undefined') {
       return;
     }
 
+    var newW, newH;
+    if (backingW > 0 && backingH > 0 && scale > 0) {
+      newW = backingW;
+      newH = backingH;
+    } else {
+      scale = getDisplayScaleFactor();
+      newW = width * scale;
+      newH = height * scale;
+    }
+
     // GL canvases are absolute children of #window-container — anchor them
     // the same way setWindowRect anchors window divs, so they stay glued to
     // their frame in hosts where the container is not at the canvas origin.
     var base = wxScreenBase(false);
-    canvas.style.left = (x + base.left) + 'px';
-    canvas.style.top = (y + base.top) + 'px';
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
-
-    var scaleFactor = getDisplayScaleFactor();
-    var newW = width * scaleFactor;
-    var newH = height * scaleFactor;
+    var left = x + base.left;
+    var top = y + base.top;
+    // KICLOUD: A10: round the corner's position in the top page to a device pixel. Where the
+    // position already is on one (every ratio-1 and ratio-2 page here), nothing moves.
+    var container = document.getElementById('window-container');
+    var crect = container.getBoundingClientRect();
+    var page = pageOffsetOfViewport();
+    var pageLeft = page.left + crect.left + container.clientLeft + left;
+    var pageTop = page.top + crect.top + container.clientTop + top;
+    left += Math.round(pageLeft * scale) / scale - pageLeft;
+    top += Math.round(pageTop * scale) / scale - pageTop;
+    canvas.style.left = left + 'px';
+    canvas.style.top = top + 'px';
+    canvas.style.width = (newW / scale) + 'px';
+    canvas.style.height = (newH / scale) + 'px';
     // Only reassign the backing store when the pixel size actually changes:
     // assigning canvas.width/height clears the GL drawing buffer, which would
     // blank/flicker the 3D view on every pointermove during a title-bar drag (a
@@ -2055,6 +2124,35 @@ if (typeof navigator !== 'undefined') {
 
     var textMetrics = offscreenContext.measureText(text);
     return Math.round(textMetrics.width);
+  };
+
+  // KICLOUD: LOOK.6 (docs/patches.md, docs/future-features/FEATURE_LOOKS_SPIKES.md 0.6): the
+  // line height of a CSS font string, in whole CSS px. It is the font's own box,
+  // ceil(fontBoundingBoxAscent + fontBoundingBoxDescent), which holds every descender (18 px for
+  // system-ui at 13 px on Noto Sans, where the old round(1.6 x points) gave 16). Used by
+  // font.cpp's GetTextExtent (the height wx lays text out with) and by wx-dom.js
+  // wxDomSetFont (the line height of a DOM control), so measuring and drawing agree. Measured
+  // once per string and cached: a page uses a handful of fonts, and the metrics of a font
+  // string do not change. Where a browser has no font-box metrics, ceil(1.2 x px) + 2 is used.
+  var fontLineHeights = new Map();
+  var fontLineHeight = function (font) {
+    var cached = fontLineHeights.get(font);
+    if (cached !== undefined) {
+      return cached;
+    }
+    offscreenContext.font = font;
+    var m = offscreenContext.measureText('Mgjpqy');
+    var height;
+    if (typeof m.fontBoundingBoxAscent === 'number' && typeof m.fontBoundingBoxDescent === 'number') {
+      height = Math.ceil(m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
+    } else {
+      // font.cpp writes the size as "<n>px"; anything else counts as 16 px
+      var px = /(\d+(?:\.\d+)?)px/.exec(font);
+      height = Math.ceil(1.2 * (px ? parseFloat(px[1]) : 16)) + 2;
+    }
+    height = Math.max(1, height);
+    fontLineHeights.set(font, height);
+    return height;
   };
 
   var rotateAtPoint = function (id, x, y, angle) {
