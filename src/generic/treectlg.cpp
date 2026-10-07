@@ -1764,6 +1764,17 @@ wxTreeItemId wxGenericTreeCtrl::DoInsertItem(const wxTreeItemId& parentId,
         data->m_pItem = item;
     }
 
+#ifdef wxTREE_NAV_LOOK
+    // KICLOUD: LOOK.10 (docs/patches.md): in a navigation list an item becomes a group heading
+    // when it gets its first child, and a heading is drawn in another font and in upper case
+    // (GetDisplayText). Its text size may have been measured already as a plain page (a treebook
+    // lays its list out after every page it adds), and that cached width would make the list
+    // too narrow for the heading (the calculator's "POWER, CURRENT AND ISOLATION" was cut off).
+    // Forget the measured size, so the next layout measures the heading as it is drawn.
+    if ( !parent->HasChildren() && wxTreeIsNavList(this) )
+        parent->ResetTextSize();
+#endif
+
     parent->Insert( item, previous == (size_t)-1 ? parent->GetChildren().size()
                                                  : previous );
 
@@ -3028,6 +3039,33 @@ wxGenericTreeCtrl::PaintLevel(wxGenericTreeItem *item,
                 wxDCClipper clip(dc, xx, yy, image_w, image_h);
                 wxDrawImageBitmap(this, m_imagesButtons, image, dc, xx, yy);
             }
+#ifdef wxTREE_NAV_LOOK
+            else if ( navList )
+            {
+                // KICLOUD: LOOK.10 (docs/patches.md): a navigation list's group heading shows a
+                // small chevron in the heading's muted colour (wxSYS_COLOUR_GRAYTEXT), pointing
+                // down when the group is open and right when it is closed, instead of the generic
+                // renderer's box, which is always white with a black sign and so stood out as a
+                // white square in the dark theme. Same place and the same click target as before.
+                const int half = FromDIP(3);
+                wxPoint pts[3];
+                if ( item->IsExpanded() )
+                {
+                    pts[0] = wxPoint(x - half, y_mid - half / 2);
+                    pts[1] = wxPoint(x, y_mid + half / 2 + 1);
+                    pts[2] = wxPoint(x + half, y_mid - half / 2);
+                }
+                else
+                {
+                    pts[0] = wxPoint(x - half / 2, y_mid - half);
+                    pts[1] = wxPoint(x + half / 2 + 1, y_mid);
+                    pts[2] = wxPoint(x - half / 2, y_mid + half);
+                }
+                wxDCPenChanger chevronPen(dc, wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT),
+                                                    FromDIP(1)));
+                dc.DrawLines(3, pts);
+            }
+#endif
             else // no custom buttons
             {
                 const int wImage = FromDIP(9);

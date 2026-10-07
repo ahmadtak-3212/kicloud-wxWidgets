@@ -69,6 +69,17 @@ bool wxTextCtrl::Create(wxWindow *parent, wxWindowID id,
     if ( WasmGetDomId() && !(style & wxTE_MULTILINE) && wxWasmIsDialogFormControl(this) )
         EM_ASM({ if (typeof wxDomSetRoomy === 'function') wxDomSetRoomy($0); }, WasmGetDomId());
 
+    // KICLOUD: LOOK.10 (docs/patches.md): the field is a page element (an <input> or <textarea>)
+    // that draws its own box, with rounded corners. The port would also fill the control's
+    // rectangle on the window canvas under it in the control's background colour (an unhandled
+    // erase event, window.cpp), and when KiCad gives a field its own colour (the calculator's
+    // read-only result fields use wxSYS_COLOUR_3DLIGHT) that square showed round the rounded
+    // corners. Handling the erase event here, without filling, leaves the canvas as the parent
+    // painted it, so only the field's own box shows. A handler bound later by the application
+    // still runs first.
+    if ( WasmGetDomId() )
+        Bind(wxEVT_ERASE_BACKGROUND, [](wxEraseEvent&) { /* the page element draws the box */ });
+
     // set the initial contents without generating a wxEVT_TEXT event
     ChangeValue(value);
 

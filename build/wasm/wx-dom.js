@@ -1725,12 +1725,18 @@
       btn.setAttribute('role', 'tab');
       btn.setAttribute('aria-selected', tab.selected ? 'true' : 'false');
       btn.textContent = tab.label;
+      // KICLOUD: LOOK.10 (docs/patches.md): when the tabs are wider than the notebook (the
+      // drawing sheet editor's 150 px Properties panel: "Item Properties" and "General Options"
+      // need 113 px each), the tabs shrink and end in "…". The selected tab never shrinks, so
+      // the page shown is always named in full, and every tab's full label is its tooltip.
+      btn.title = tab.label;
       btn.style.cssText =
         'font:inherit;margin:1px 0 0 1px;padding:2px 8px;' +
         'border:1px solid #808080;border-bottom:none;' +
         'border-radius:3px 3px 0 0;white-space:pre;' +
         'overflow:hidden;text-overflow:ellipsis;' +
-        'flex:0 1 auto;min-width:0;cursor:default;' +
+        (tab.selected ? 'flex:0 0 auto;' : 'flex:0 1 auto;') +
+        'min-width:0;cursor:default;' +
         (tab.selected
           ? 'background:#f5f4f2;font-weight:bold;position:relative;top:1px;'
           : 'background:#c8c4bc;');
