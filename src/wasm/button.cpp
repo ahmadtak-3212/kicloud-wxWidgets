@@ -22,9 +22,15 @@
 // KICLOUD: LOOK.6: defined in textctrl.cpp (a dialog's form control gets the roomy size)
 extern bool wxWasmIsDialogFormControl(const wxWindow* win);
 
-// KICLOUD: LOOK.6: the dashboard's form control height and a text button's side padding, px
-static const int FORM_CONTROL_HEIGHT = 30;
+// KICLOUD: LOOK.6: a text button's side padding, px (wx-dom.js applyRoomyPadding)
 static const int BUTTON_SIDE_PADDING = 12;
+
+// KICLOUD: LOOK.6: the dashboard's form control height for buttons, px, from its one definition
+// in wx-dom.js (wxDomRoomyMinHeight); 0 when the page has no wx-dom.js
+static int FormControlHeight()
+{
+    return EM_ASM_INT({ return typeof wxDomRoomyMinHeight === 'function' ? wxDomRoomyMinHeight(1) : 0; });
+}
 
 wxButton::wxButton()
 {
@@ -124,7 +130,7 @@ wxSize wxButtonBase::GetDefaultSize(wxWindow* win)
             dc.SetFont(win->GetFont());
         const wxSize ext = dc.GetTextExtent(wxT("OK Cancel"));
         size.x = ext.x + 2 * BUTTON_SIDE_PADDING + 4;   // label margins + border
-        size.y = wxMax(ext.y + 2 * 4 + 4, FORM_CONTROL_HEIGHT);
+        size.y = wxMax(ext.y + 2 * 4 + 4, FormControlHeight());
     }
     return size;
 }

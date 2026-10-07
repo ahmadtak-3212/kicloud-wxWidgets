@@ -19,8 +19,12 @@
 // KICLOUD: LOOK.6: defined in textctrl.cpp (a dialog's form control gets the roomy size)
 extern bool wxWasmIsDialogFormControl(const wxWindow* win);
 
-// KICLOUD: LOOK.6: the dashboard's form control height, px
-static const int FORM_CONTROL_HEIGHT = 30;
+// KICLOUD: LOOK.6: the dashboard's form control height for fields, px, from its one definition
+// in wx-dom.js (wxDomRoomyMinHeight); 0 when the page has no wx-dom.js
+static int FormControlHeight()
+{
+    return EM_ASM_INT({ return typeof wxDomRoomyMinHeight === 'function' ? wxDomRoomyMinHeight(0) : 0; });
+}
 
 wxChoice::wxChoice() :
     m_selection(wxNOT_FOUND)
@@ -113,7 +117,7 @@ wxSize wxChoice::DoGetBestSize() const
     // DOM measure applies too, wx-dom.js wxDomIntrinsicSize)
     int minHeight = GetCharHeight() + 8;
     if (wxWasmIsDialogFormControl(this))
-        minHeight = wxMax(minHeight, FORM_CONTROL_HEIGHT);
+        minHeight = wxMax(minHeight, FormControlHeight());
     if (best.y < minHeight)
         best.y = minHeight;
 

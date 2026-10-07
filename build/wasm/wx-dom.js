@@ -625,14 +625,21 @@
   // ========== Dialog form controls (KICLOUD: LOOK.6) ==========
   //
   // The dashboard's form look for KiCad's dialogs: buttons, one-line text fields and choices of
-  // a dialog or floating window are at least ROOMY_MIN_HEIGHT px tall, with 10-12 px of
+  // a dialog or floating window are at least ROOMY_MIN_HEIGHT_* px tall, with 10-12 px of
   // horizontal padding. The C++ side decides which controls these are (button.cpp,
   // textctrl.cpp, choice.cpp: wxWasmIsDialogFormControl) and marks them with wxDomSetRoomy. The
   // minimum height is applied to the measured best size only (wxDomIntrinsicSize), never as a
   // CSS min-height: the sizer's final rect (wxDomSetRect) stays the element's real size, so a
   // control KiCad sized smaller on purpose still matches wx's layout. The padding is real
   // styling, so the measurement includes it.
-  var ROOMY_MIN_HEIGHT = 30;
+  // The dashboard's form control height, px: buttons, and fields (text fields, choices, combo
+  // boxes). The one place it is set: the C++ floors (button.cpp GetDefaultSize, choice.cpp
+  // DoGetBestSize) ask wxDomRoomyMinHeight for it.
+  var ROOMY_MIN_HEIGHT_BUTTON = 30;
+  var ROOMY_MIN_HEIGHT_FIELD = 30;
+  window.wxDomRoomyMinHeight = function (isButton) {
+    return isButton ? ROOMY_MIN_HEIGHT_BUTTON : ROOMY_MIN_HEIGHT_FIELD;
+  };
 
   // Is el a control of a dialog or floating window: a top-level window that is not a page frame
   // (an editor tab) or a popup. The main frame's controls live in #main-window, which has no
@@ -1797,11 +1804,11 @@
 
     var w = Math.min(0xffff, Math.max(1, Math.ceil(rect.width)));
     var h = Math.min(0xffff, Math.max(1, Math.ceil(rect.height)));
-    // KICLOUD: LOOK.6: a dialog form control (wxDomSetRoomy) is at least ROOMY_MIN_HEIGHT tall,
-    // except an image-only button
-    if (el.dataset.wxRoomy === '1' &&
-        (el.tagName !== 'BUTTON' || (el.textContent || '').trim())) {
-      h = Math.max(h, ROOMY_MIN_HEIGHT);
+    // KICLOUD: LOOK.6: a dialog form control (wxDomSetRoomy) is at least the form control height
+    // tall, except an image-only button
+    if (el.dataset.wxRoomy === '1') {
+      if (el.tagName !== 'BUTTON') h = Math.max(h, ROOMY_MIN_HEIGHT_FIELD);
+      else if ((el.textContent || '').trim()) h = Math.max(h, ROOMY_MIN_HEIGHT_BUTTON);
     }
     return (w << 16) | h;
   };
