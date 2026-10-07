@@ -249,10 +249,16 @@ wxString wxNativeFontInfo::ToString() const
 
         // KICLOUD: LOOK.6: the size in whole CSS px (FontPixelSize; was "%fpt"). This string
         // is the CSS font the canvas measures and draws with and the DOM controls show.
-        m_renderedString = wxString::Format(wxT("%s %d %dpx/1 %s"),
+        // Its line height is the one the port's string gave before ("<points>pt/1": one
+        // unrounded point size, points x 96/72 px), so the rows that keep it (the menu bar and
+        // the DOM tool bar, wx-dom.js wxDomSetFont) keep their former pixel height and every
+        // window below them its former position. The canvas ignores a font's line height; the
+        // other DOM controls take the font box's (wx.js fontLineHeight).
+        m_renderedString = wxString::Format(wxT("%s %d %dpx/%.6fpx %s"),
                                             GetStyleString(GetStyle()),
                                             GetNumericWeight(),
                                             FontPixelSize(GetFractionalPointSize()),
+                                            GetFractionalPointSize() * 96.0 / 72.0,
                                             fontFaceAndFamily.utf8_str());
         m_isRendered = true;
     }

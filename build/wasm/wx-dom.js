@@ -1184,9 +1184,10 @@
 
   // The control's CSS font: the wxFont's native description (src/wasm/font.cpp ToString).
   // KICLOUD: LOOK.6: and its line height, the font's own box (wx.js fontLineHeight, the height
-  // GetTextExtent reports). The description carries "/1", a line box of one font size, which
-  // cut the descenders of labels (a control clips its overflow). The menu bar and the DOM tool
-  // bar keep "/1": they are the editor frame's rows, measured as they were.
+  // GetTextExtent reports). The description's own line height (one point size in px, as the port
+  // always had) cut the descenders of labels (a control clips its overflow). The menu bar and the
+  // DOM tool bar keep the description's: they are the frames' rows, and keeping their former
+  // pixel height keeps every window below them (a drawing canvas) where it was.
   window.wxDomSetFont = function (domId, cssFont) {
     var el = controls.get(domId);
     if (el && cssFont) {
