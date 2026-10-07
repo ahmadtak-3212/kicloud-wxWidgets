@@ -16,6 +16,41 @@
 
 #include <emscripten.h>
 
+#include <string>           // KICLOUD: A15
+#include <unordered_map>    // KICLOUD: A15
+
+// KICLOUD: A15 (docs/patches.md; docs/future-features/FEATURE_LOOKS_SPIKES.md 0.6)
+// The distance, in CSS px, from the top of a line of text to its baseline for the CSS font string
+// `fontString`: ceil(fontBoundingBoxAscent), the font's own ascent rounded up to a whole pixel.
+// A line is ceil(fontBoundingBoxAscent + fontBoundingBoxDescent) tall (wx.js fontLineHeight, the
+// height wxFont::GetTextExtent reports), so a baseline here leaves at least the font's descent
+// below it and descenders (g, j, p, q, y) are never cut off by a control that clips to its text.
+// `lineHeight` is that height; it gives the old 5/6 rule as the fallback for a browser without
+// font-box metrics. Measured once per font string with the same context and sample text as the
+// line height (a page uses a handful of fonts, and a font's metrics do not change), and kept for
+// the life of the page; this runs on the main thread only, like all drawing.
+static int wxWasmTextBaseline(const wxString& fontString, int lineHeight)
+{
+    static std::unordered_map<std::string, int> s_baselines;
+
+    const std::string key(fontString.utf8_str());
+    const std::unordered_map<std::string, int>::const_iterator found = s_baselines.find(key);
+    if (found != s_baselines.end())
+        return found->second;
+
+    int baseline = EM_ASM_INT({
+        offscreenContext.font = UTF8ToString($0);
+        var m = offscreenContext.measureText('Mgjpqy');
+        return typeof m.fontBoundingBoxAscent === 'number' ? Math.ceil(m.fontBoundingBoxAscent) : -1;
+    }, key.c_str());
+
+    if (baseline < 0 || baseline > lineHeight)
+        baseline = static_cast<int>(lineHeight * (5.0 / 6.0));
+
+    s_baselines[key] = baseline;
+    return baseline;
+}
+
 // ----------------------------------------------------------------------------
 // wxWasmDCImpl
 // ----------------------------------------------------------------------------
@@ -619,7 +654,9 @@ void wxWasmDCImpl::DoDrawText(const wxString& text, wxCoord x, wxCoord y)
         SetBrush(saveBrush);
     }
 
-    wxCoord textY = devY + textHeight * (5.0 / 6.0);
+    // KICLOUD: A15: the baseline is ceil(ascent) below the top of the line (wxWasmTextBaseline);
+    // it was 5/6 of the line height, which put text about 1 px lower than the font box asks for.
+    wxCoord textY = devY + wxWasmTextBaseline(m_font.GetNativeFontInfoDesc(), textHeight);
 
     // Get text decoration flags from font
     bool underline = m_font.IsOk() && m_font.GetUnderlined();

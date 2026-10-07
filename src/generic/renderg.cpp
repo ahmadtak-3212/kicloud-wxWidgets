@@ -531,19 +531,35 @@ wxRendererGeneric::DrawTreeItemButton(wxWindow * WXUNUSED(win),
                                       const wxRect& rect,
                                       int flags)
 {
+#ifdef __EMSCRIPTEN__
+    // KICLOUD: A16 (docs/patches.md): in the browser editor the box takes the colours of the
+    // port's system colour table (src/wasm/settings.cpp), which follows the page's light or dark
+    // theme: a field-coloured box (wxSYS_COLOUR_WINDOW) with a line-coloured border
+    // (wxSYS_COLOUR_BTNSHADOW) and a text-coloured sign (wxSYS_COLOUR_WINDOWTEXT). The fixed white
+    // box with a black sign stood out as a row of white squares in every dark tree (the symbol and
+    // footprint editors' library trees, KiCad's wxDataViewCtrl, draw their expanders here).
+    const wxColour boxColour = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+    const wxColour borderColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+    const wxColour signColour = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+#else
+    const wxColour boxColour = *wxWHITE;
+    const wxColour borderColour = wxGREY_PEN->GetColour();
+    const wxColour signColour = *wxBLACK;
+#endif
+
     // store settings
-    wxDCPenChanger penChanger(dc, *wxGREY_PEN);
-    wxDCBrushChanger brushChanger(dc, *wxWHITE_BRUSH);
+    wxDCPenChanger penChanger(dc, wxPen(borderColour));
+    wxDCBrushChanger brushChanger(dc, wxBrush(boxColour));
 
     dc.DrawRectangle(rect);
 
-    // black lines
+    // the sign's lines (black outside the browser editor)
     const wxCoord xMiddle = rect.x + rect.width/2;
     const wxCoord yMiddle = rect.y + rect.height/2;
 
     // half of the length of the horz lines in "-" and "+"
     const wxCoord halfWidth = rect.width/2 - 2;
-    wxDCPenChanger setPen(dc, *wxBLACK_PEN);
+    wxDCPenChanger setPen(dc, wxPen(signColour));
     dc.DrawLine(xMiddle - halfWidth, yMiddle,
                 xMiddle + halfWidth + 1, yMiddle);
 

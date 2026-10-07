@@ -63,6 +63,105 @@ void wxWasmSetNextPageFrame(const char* key)
                                                                    : wxString();
 }
 
+// ----------------------------------------------------------------------------
+// KICLOUD: A14 (docs/patches.md): dialogs and floating windows stay on the page
+// ----------------------------------------------------------------------------
+//
+// On a desktop, the window manager keeps a newly shown or moved window on the screen and never
+// makes it narrower than its title. In the browser the page is the screen and this port is the
+// window manager, so it does the same here. Without it, KiCad put dialogs back where they were
+// last closed even when they had grown since (the PCB Print dialog shares its saved place with the
+// shorter schematic one and opened with its Print button below a 900 px page), opened the drawing
+// sheet editor's Design Inspector with its lower half below the page, and showed the Gerber
+// viewer's D Codes dialog narrower than its own title ("D...").
+//
+// Every change goes through SetSize(), so wx's own idea of the window's place (used to hit-test
+// canvas-drawn controls) and the DOM element (setWindowRect) always agree.
+
+// The size of the page in wx screen coordinates: the main window's size, which is the area every
+// top-level window is placed in. (0, 0) while the page has no layout (a hidden editor iframe).
+static wxSize wxWasmPageSize()
+{
+    if (wxTheApp && wxTheApp->GetDisplay())
+        return wxTheApp->GetDisplay()->GetScreenSize();
+
+    return wxSize(0, 0);
+}
+
+// The width, in px, the window `cssId` needs so its DOM title bar shows its whole title: the
+// title text's own width and padding, plus the rest of the bar (the close button and its margin),
+// plus the window's own border. The text is measured as laid out (a Range round its contents), not
+// as its box: the box stretches with the window, and the element may still have the size of the
+// geometry being replaced, so its width would forbid making a window narrower. 0 when the window
+// has no DOM title bar or is not on screen (display: none has no layout to measure). Reads the DOM
+// only; changes nothing.
+static int wxWasmTitleBarWidth(int cssId)
+{
+    return EM_ASM_INT({
+        var win = document.getElementById('window-' + $0);
+        var bar = win ? win.querySelector(':scope > .window-titlebar') : null;
+        var text = bar ? bar.querySelector(':scope > .window-titlebar-text') : null;
+        if (!text || !text.getClientRects().length) {
+            return 0;
+        }
+        var px = function (v) { return parseFloat(v || '0') || 0; };
+        var range = document.createRange();
+        range.selectNodeContents(text);
+        var ts = getComputedStyle(text);
+        var need = range.getBoundingClientRect().width + px(ts.paddingLeft) + px(ts.paddingRight);
+        for (var i = 0; i < bar.children.length; i++) {
+            var child = bar.children[i];
+            if (child !== text) {
+                var cs = getComputedStyle(child);
+                need += child.offsetWidth + px(cs.marginLeft) + px(cs.marginRight);
+            }
+        }
+        // + 1: a title a fraction of a pixel wider than its box is already drawn with an ellipsis
+        return Math.ceil(need + (win.offsetWidth - bar.clientWidth) + 1);
+    }, cssId);
+}
+
+// Moves, and if needed resizes, the shown top-level window `win` so that it lies wholly on the
+// page and is at least as wide as its title, as a desktop window manager does:
+//   - at least as wide as its title (but never wider than the page);
+//   - never larger than the page; a window that is larger is shrunk to it, and its sizers then lay
+//     it out smaller (scrolling where KiCad's dialog scrolls). Its minimum size still wins: wx
+//     keeps it (nonownedwnd.cpp), and the layout would overlap below it;
+//   - its right and bottom edges on the page, then its left and top edges, so a window that is
+//     still taller than the page (its minimum) keeps its title bar visible.
+// Returns true when it changed the window's geometry, through SetSize(), which sends the window a
+// complete size event of its own. Does nothing while the page has no size.
+static bool wxWasmKeepOnPage(wxTopLevelWindowWasm* win)
+{
+    const wxSize page = wxWasmPageSize();
+    if (page.x <= 0 || page.y <= 0)
+        return false;
+
+    const wxRect rect = win->GetRect();     // a top-level window's rect is in screen coordinates
+    int width = rect.width;
+    int height = rect.height;
+
+    width = wxMax(width, wxWasmTitleBarWidth(win->GetCSSId()));
+    width = wxMin(width, page.x);
+    height = wxMin(height, page.y);
+
+    // the size SetSize() will actually give the window (nonownedwnd.cpp keeps the minimum)
+    const wxSize minSize = win->GetMinSize();
+    if (minSize.x != wxDefaultCoord)
+        width = wxMax(width, minSize.x);
+    if (minSize.y != wxDefaultCoord)
+        height = wxMax(height, minSize.y);
+
+    int x = wxMax(wxMin(rect.x, page.x - width), 0);
+    int y = wxMax(wxMin(rect.y, page.y - height), 0);
+
+    if (x == rect.x && y == rect.y && width == rect.width && height == rect.height)
+        return false;
+
+    win->SetSize(x, y, width, height);
+    return true;
+}
+
 bool wxTopLevelWindowWasm::Create(wxWindow *parent,
                                   wxWindowID id,
                                   const wxString& title,
@@ -129,6 +228,23 @@ bool wxTopLevelWindowWasm::Create(wxWindow *parent,
         EM_ASM({
             createWindowResizeHandles($0, $1);
         }, GetCSSId(), TITLE_BAR_HEIGHT);
+    }
+
+    // KICLOUD: A14: every move or resize of a shown dialog or floating window (KiCad restoring
+    // its saved place, a drag of its title bar or edge, a Centre()) ends on the page. wxWindowWasm
+    // sends a size event for a move too. Bound here, first, so the handlers that KiCad binds later
+    // (DIALOG_SHIM::OnSize) run before it. When it corrects the geometry, its SetSize() has already
+    // sent a complete size event for the corrected one (laying the window out at its final size),
+    // so the event for the rejected geometry goes no further; otherwise it goes on as before.
+    if (HasTitleBar())
+    {
+        Bind(wxEVT_SIZE, [this](wxSizeEvent& event)
+        {
+            if (IsShown() && wxWasmKeepOnPage(this))
+                return;
+
+            event.Skip();
+        });
     }
 
     return true;
@@ -206,7 +322,17 @@ void wxTopLevelWindowWasm::NotifyPage(const char* event) const
 bool wxTopLevelWindowWasm::Show(bool show)
 {
     if (!IsPageFrame() || show == IsShown())
-        return base_type::Show(show);
+    {
+        const bool changed = base_type::Show(show);
+
+        // KICLOUD: A14: a dialog or floating window shown where it does not fit (placed while
+        // hidden, or created too narrow for its title) is brought wholly onto the page. Measured
+        // after it is shown: a hidden window's title bar has no layout.
+        if (show && HasTitleBar())
+            wxWasmKeepOnPage(this);
+
+        return changed;
+    }
 
     if (show)
     {
@@ -424,6 +550,10 @@ void wxTopLevelWindowWasm::SetTitle(const wxString &title)
         EM_ASM({
             setWindowTitle($0, UTF8ToString($1));
         }, GetCSSId(), static_cast<const char *>(title.utf8_str()));
+
+        // KICLOUD: A14: a shown window whose new title is longer widens to show it whole
+        if (IsShown())
+            wxWasmKeepOnPage(this);
     }
 }
 
