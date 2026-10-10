@@ -712,6 +712,22 @@ if (typeof navigator !== 'undefined') {
     return slot;
   };
 
+  // Bring every element drawn in slot `slot` (window elements, GL canvases, datalists) back into this
+  // document at once, before C++ moves the frame back (wxWasmAttachPageFrame(key, 0), which runs
+  // later, from the event loop). Called when the slot's window is closing (its pagehide): a window's
+  // document is destroyed right after, and a canvas still in it loses its drawing (a WebGL context
+  // of a destroyed document is lost; the editor came back blank). The elements keep their styles
+  // until C++ places them again in this document. Safe to call twice.
+  var wxEvacuateFrameDocument = function (slot) {
+    if (!frameSlots.has(slot)) return;
+    windowMap.forEach(function (wd, id) {
+      if (id !== 0 && wd && wd.slot === slot && wd.window) wxMoveToSlot(wd.window, 0);
+    });
+    glCanvasMap.forEach(function (canvas) {
+      if (Number(canvas.dataset.wxSlot || 0) === slot) wxMoveToSlot(canvas, 0);
+    });
+  };
+
   // Forget slot `slot`: remove its listeners and stand-ins. C++ has moved its windows back to
   // slot 0 before (wxWasmAttachPageFrame(key, 0)). Safe on a closed window and to call twice.
   var wxDetachFrameDocument = function (slot) {
@@ -748,9 +764,15 @@ if (typeof navigator !== 'undefined') {
   var wxFrameSlotSize = function (slot, which) {
     var s = frameSlots.get(slot);
     if (!s) return 0;
+    // a closed (or closing) window has no layout: its slot keeps the size it had, never 0 x 0 (the frame
+    // would be laid out at 1 x 1, and KiCad's panel layout does not come back from that)
+    var closed = false;
+    try { closed = s.win.closed; } catch (e) { closed = true; }
+    var live = wxStageRect(s);
+    if (s.size && (closed || live.width < 2 || live.height < 2)) return which ? s.size.height : s.size.width;
     if (document.visibilityState !== 'hidden' || !s.size) {
-      var r = wxStageRect(s);
-      if (document.visibilityState === 'hidden' && !s.size) {
+      var r = live;
+      if ((document.visibilityState === 'hidden' || r.width < 2 || r.height < 2) && !s.size) {
         var mw = document.getElementById('main-window');
         r = mw ? { width: mw.offsetWidth, height: mw.offsetHeight } : r;
       }
@@ -778,6 +800,7 @@ if (typeof navigator !== 'undefined') {
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     window.wxAttachFrameDocument = wxAttachFrameDocument;
     window.wxDetachFrameDocument = wxDetachFrameDocument;
+    window.wxEvacuateFrameDocument = wxEvacuateFrameDocument;
     // For wx-dom.js and the page (native-startup.js): the slot helpers above.
     window.wxFrames = {
       STRIDE: WX_SLOT_STRIDE,
@@ -1920,8 +1943,8 @@ if (typeof navigator !== 'undefined') {
       canvas.height = d.h;
       slots[d.slot] = true;
     });
-    // every slot: its frame takes its window's size now (it kept its size while this page was hidden)
-    frameSlots.forEach(function (v, slot) { slots[slot] = true; });
+    // every open slot: its frame takes its window's size now (it kept its size while this page was hidden)
+    frameSlots.forEach(function (v, slot) { try { if (!v.win.closed) slots[slot] = true; } catch (e) { /* closing */ } });
     Object.keys(slots).forEach(function (slot) {
       try { Module.ccall('wx_frame_slot_resized', null, ['number'], [Number(slot)]); } catch (e) { /* the engine is gone */ }
     });
