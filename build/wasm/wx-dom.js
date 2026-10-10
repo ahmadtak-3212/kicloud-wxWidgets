@@ -18,6 +18,40 @@
 
   var nextControlId = 1;
   var controls = new Map(); // domId -> root HTMLElement
+
+  // KICLOUD: S4.8 (docs/patches.md): an editor tab torn off into a second browser window is
+  // drawn into that window's document (wx.js "frame slots", window.wxFrames). These helpers keep
+  // this file's popups, focus checks and document-wide listeners in the document each control
+  // is in. Without wx.js's helpers (an older wx.js) everything stays in this document.
+  var frames = window.wxFrames || null;
+  // requestAnimationFrame that also fires while this page is hidden (a torn-off tab is visible)
+  function raf(cb) {
+    return frames ? frames.requestFrame(cb) : requestAnimationFrame(cb);
+  }
+  // The computed style of an element of any document
+  function styleOf(el) {
+    return frames ? frames.styleOf(el) : getComputedStyle(el);
+  }
+  // Every document an editor may be drawn into (this one and the attached windows')
+  function allDocuments() {
+    if (!frames) return [document];
+    return [document].concat(frames.slots().map(function (slot) { return frames.document(slot); }));
+  }
+  // Run install(doc, win, opts) for this document and for each attached document; opts carries
+  // the AbortSignal that removes the listeners when that window is detached (none for this one).
+  function onEveryDocument(install) {
+    var run = function (doc, win, slot, signal) {
+      install(doc, win, function (extra) {
+        var o = {};
+        if (extra) Object.keys(extra).forEach(function (k) { o[k] = extra[k]; });
+        if (signal) o.signal = signal;
+        return o;
+      });
+    };
+    if (frames) frames.eachDocument(run); else run(document, window, 0, null);
+  }
+  // The document a newly built control will be shown in (set by wxDomCreateControl)
+  var buildDoc = null;
   var inputs = new Map();   // domId -> value-bearing element (if != root)
   var labels = new Map();   // domId -> label text target (if != root)
 
@@ -94,6 +128,7 @@
   // event below, including over the GAL canvas (where forwardTarget is null).
   var lastPointerClientX = 0;
   var lastPointerClientY = 0;
+  var lastPointerDoc = document;   // KICLOUD: S4.8: the document those coordinates belong to
 
   // Marks the bundle as DOM-port for tests/boot code.
   window.wxDomPort = true;
@@ -367,7 +402,7 @@
         var dl = document.createElement('datalist');
         dl.id = 'wx-datalist-' + nextControlId; // == the domId assigned below
         root.setAttribute('list', dl.id);
-        document.body.appendChild(dl);
+        (buildDoc || document).body.appendChild(dl);   // KICLOUD: S4.8: the field's document
         root.dataset.wxDatalist = dl.id;
         break;
       }
@@ -445,7 +480,9 @@
       return 0;
     }
 
+    buildDoc = container.ownerDocument;   // KICLOUD: S4.8
     var built = buildControl(type, typeAttr);
+    buildDoc = null;
     var el = built.root;
 
     var domId = nextControlId++;
@@ -559,7 +596,7 @@
     var el = controls.get(domId);
     if (el) {
       if (el.dataset.wxDatalist) {
-        var dl = document.getElementById(el.dataset.wxDatalist);
+        var dl = el.ownerDocument.getElementById(el.dataset.wxDatalist);   // KICLOUD: S4.8
         if (dl) dl.remove();
       }
       el.remove();
@@ -724,7 +761,7 @@
     // dialog select-all-on-open runs while the field is still unfocused and
     // then focuses it, so re-apply the range once on the next focus to make
     // "select then focus" (type-to-replace) behave like native.
-    if (document.activeElement !== el) {
+    if (el.ownerDocument.activeElement !== el) {   // KICLOUD: S4.8: the field's document
       if (el.__wxReselect) el.removeEventListener('focus', el.__wxReselect);
       el.__wxReselect = function () {
         apply();
@@ -765,7 +802,7 @@
       if (radios[value]) radios[value].checked = true;
     } else if (el.dataset && el.dataset.wxDatalist) {
       // combobox selection = the nth datalist option's text
-      var dl = document.getElementById(el.dataset.wxDatalist);
+      var dl = el.ownerDocument.getElementById(el.dataset.wxDatalist);   // KICLOUD: S4.8
       var opt = dl && dl.options[value];
       if (opt) el.value = opt.value;
     } else if (el.dataset && el.dataset.wxScrollbar) {
@@ -801,7 +838,7 @@
     }
     if (el.dataset && el.dataset.wxDatalist) {
       // combobox selection = index of the option matching the current text
-      var dl = document.getElementById(el.dataset.wxDatalist);
+      var dl = el.ownerDocument.getElementById(el.dataset.wxDatalist);   // KICLOUD: S4.8
       if (dl) {
         for (var j = 0; j < dl.options.length; j++) {
           if (dl.options[j].value === el.value) return j;
@@ -956,7 +993,7 @@
   // dragSliderTo reads screenX/screenY off the track, so map them explicitly
   // (rectInfo only carries x/y).
   function scheduleScrollbarRegistry(domId, el) {
-    requestAnimationFrame(function () {
+    raf(function () {   // KICLOUD: S4.8
       var reg = window.wxElementRegistry;
       if (!reg || !el.isConnected || !el._wxSb) return;
       var stale = [];
@@ -1002,7 +1039,7 @@
     if (!el) return;
     var items = joined === '' ? [] : joined.split('\x1f');
     if (el.dataset.wxDatalist) {
-      var dl = document.getElementById(el.dataset.wxDatalist);
+      var dl = el.ownerDocument.getElementById(el.dataset.wxDatalist);   // KICLOUD: S4.8
       if (dl) {
         dl.textContent = '';
         items.forEach(function (it) {
@@ -1164,7 +1201,7 @@
 
   window.wxDomFocus = function (domId) {
     var el = inputs.get(domId) || controls.get(domId);
-    if (el && document.activeElement !== el) el.focus();
+    if (el && el.ownerDocument.activeElement !== el) el.focus();   // KICLOUD: S4.8
   };
 
   // KICLOUD: FIREFOX (docs/patches.md): whether the browser's focus is on this control (or inside it) right now. wx handles a
@@ -1174,7 +1211,7 @@
   // controls passed the focus back and forth without end (Tab order broken, keys never handled).
   window.wxDomIsActive = function (domId) {
     var el = inputs.get(domId) || controls.get(domId);
-    var ae = document.activeElement;
+    var ae = el ? el.ownerDocument.activeElement : null;   // KICLOUD: S4.8: the control's document
     return !!el && !!ae && (ae === el || el.contains(ae));
   };
 
@@ -1183,10 +1220,13 @@
   // still has it, so keys go back to wx. Controls outside wx-dom (the host
   // page's own inputs) are never touched.
   window.wxDomBlurActive = function () {
-    var ae = document.activeElement;
-    if (ae && ae !== document.body && ae.closest && ae.closest('.wx-dom-control')) {
-      ae.blur();
-    }
+    // KICLOUD: S4.8: in every document an editor is drawn into
+    allDocuments().forEach(function (doc) {
+      var ae = doc.activeElement;
+      if (ae && ae !== doc.body && ae.closest && ae.closest('.wx-dom-control')) {
+        ae.blur();
+      }
+    });
   };
 
   // The control's CSS font: the wxFont's native description (src/wasm/font.cpp ToString).
@@ -1260,27 +1300,36 @@
   // KICLOUD: P3-I: an open menu closes when the page loses focus or is hidden (another tab of the
   // shell, another window), and on request from the page (window.wxDomCloseMenus, the shell's tab
   // switch)
-  window.addEventListener('blur', function () { closeMenuPopup(); });
-  document.addEventListener('visibilitychange', function () { if (document.hidden) closeMenuPopup(); });
   window.wxDomCloseMenus = function () { closeMenuPopup(); };
+  // KICLOUD: S4.8: these listeners exist in every document an editor is drawn into
+  onEveryDocument(function (doc, win, opts) {
+    win.addEventListener('blur', function () {
+      // KICLOUD: S4.8: only the window the menu is in (focus moving between this page and a
+      // torn-off window blurs the other one)
+      if (!openMenuPopup || openMenuPopup.ownerDocument === doc) closeMenuPopup();
+    }, opts());
+    doc.addEventListener('visibilitychange', function () {
+      if (doc.hidden && (!openMenuPopup || openMenuPopup.ownerDocument === doc)) closeMenuPopup();
+    }, opts());
 
-  // KICLOUD: P3-I: Escape closes an open menubar menu, as on the desktop (the context menus
-  // already close on Escape); the key does not reach wx while it closes the menu
-  document.addEventListener('keydown', function (ev) {
-    if (openMenuPopup && ev.key === 'Escape') {
-      ev.stopPropagation();
-      ev.preventDefault();
-      closeMenuPopup();
-    }
-  }, true);
+    // KICLOUD: P3-I: Escape closes an open menubar menu, as on the desktop (the context menus
+    // already close on Escape); the key does not reach wx while it closes the menu
+    doc.addEventListener('keydown', function (ev) {
+      if (openMenuPopup && ev.key === 'Escape') {
+        ev.stopPropagation();
+        ev.preventDefault();
+        closeMenuPopup();
+      }
+    }, opts({ capture: true }));
 
-  document.addEventListener('mousedown', function (ev) {
-    // any click outside an open menu closes it (mousedown so the click on
-    // another control still lands)
-    if (openMenuPopup && !openMenuPopup.contains(ev.target)) {
-      var inTitle = ev.target.closest && ev.target.closest('.wx-menu-title');
-      if (!inTitle) closeMenuPopup();
-    }
+    doc.addEventListener('mousedown', function (ev) {
+      // any click outside an open menu closes it (mousedown so the click on
+      // another control still lands)
+      if (openMenuPopup && !openMenuPopup.contains(ev.target)) {
+        var inTitle = ev.target.closest && ev.target.closest('.wx-menu-title');
+        if (!inTitle) closeMenuPopup();
+      }
+    }, opts());
   });
 
   function registryRegister(id, info) {
@@ -1350,7 +1399,7 @@
       }
       pop.appendChild(row);
       // register popup items for the e2e registry (canvas parity)
-      requestAnimationFrame(function () {
+      raf(function () {   // KICLOUD: S4.8
         if (!pop.isConnected) return;
         registryRegister(registryParent + ':menuitem:' + idx, Object.assign({
           elementType: 'menuitem',
@@ -1368,13 +1417,14 @@
     var pop = document.createElement('div');
     pop.className = 'wx-menu-popup';
     var a = anchor.getBoundingClientRect();
+    var view = anchor.ownerDocument.defaultView || window;   // KICLOUD: S4.8: the anchor's window
     pop.style.cssText =
       'position:absolute;z-index:10000;background:#d4d0c8;' +
       'border:1px solid #808080;box-shadow:2px 2px 4px rgba(0,0,0,.3);' +
       'padding:2px;white-space:pre;min-width:120px;' +
-      'left:' + (a.left + window.scrollX) + 'px;' +
-      'top:' + (a.bottom + window.scrollY) + 'px;';
-    pop.style.font = anchor.style.font || getComputedStyle(anchor).font;
+      'left:' + (a.left + view.scrollX) + 'px;' +
+      'top:' + (a.bottom + view.scrollY) + 'px;';
+    pop.style.font = anchor.style.font || styleOf(anchor).font;
 
     buildMenuItemRows(pop, items, registryParent,
       function (id) {
@@ -1390,7 +1440,7 @@
         openMenuTitle = title;
       });
 
-    document.body.appendChild(pop);
+    anchor.ownerDocument.body.appendChild(pop);   // KICLOUD: S4.8: the anchor's document
     openMenuPopup = pop;
   }
 
@@ -1413,20 +1463,27 @@
       return Promise.resolve(-1);
     }
 
-    var vx = x, vy = y;
+    // KICLOUD: S4.8: the menu opens in the document the point is in (a torn-off window's)
+    var vx = x, vy = y, doc = document;
     if (x === -1 || y === -1) {
       vx = lastPointerClientX;
       vy = lastPointerClientY;
+      doc = lastPointerDoc;
     } else {
       var inv = controls.get(invokerDomId);
       if (inv) {
         var ir = inv.getBoundingClientRect();
         vx = ir.left + x; vy = ir.top + y;
+        doc = inv.ownerDocument;
+      } else if (frames) {
+        var at = frames.screenToClient(x, y);
+        vx = at.x; vy = at.y; doc = at.doc;
       } else if (Module['canvas']) {
         var cr = Module['canvas'].getBoundingClientRect();
         vx = cr.left + x; vy = cr.top + y;
       }
     }
+    var view = doc.defaultView || window;
 
     closeMenuPopup(); // a context menu supersedes any open menubar popup
 
@@ -1437,7 +1494,7 @@
       'border:1px solid #808080;box-shadow:2px 2px 4px rgba(0,0,0,.3);' +
       'padding:2px;white-space:pre;min-width:120px;left:0;top:0;';
     if (Module['canvas']) {
-      pop.style.font = getComputedStyle(Module['canvas']).font;
+      pop.style.font = styleOf(Module['canvas']).font;
     }
 
     return new Promise(function (resolve) {
@@ -1445,8 +1502,8 @@
       function settle(id) {
         if (settled) return;
         settled = true;
-        document.removeEventListener('mousedown', onOutside, true);
-        document.removeEventListener('keydown', onKey, true);
+        doc.removeEventListener('mousedown', onOutside, true);
+        doc.removeEventListener('keydown', onKey, true);
         if (pop.parentNode) pop.remove();
         if (openMenuPopup === pop) openMenuPopup = null;
         // Drop the popup's e2e-registry entries so the dismissal is observable
@@ -1473,19 +1530,19 @@
         function (id) { settle(id); }, makeReopen());
 
       pop.__wxSettle = settle;   // KICLOUD: P3-I, closeMenuPopup() cancels it properly
-      document.body.appendChild(pop);
+      doc.body.appendChild(pop);   // KICLOUD: S4.8: doc, view: the point's document and window
       openMenuPopup = pop;
 
       // Clamp to the viewport: flip left/up when overflowing an edge.
       var w = pop.offsetWidth, h = pop.offsetHeight;
       var L = vx, T = vy;
-      if (L + w > window.innerWidth) L = Math.max(0, vx - w);
-      if (T + h > window.innerHeight) T = Math.max(0, vy - h);
+      if (L + w > view.innerWidth) L = Math.max(0, vx - w);
+      if (T + h > view.innerHeight) T = Math.max(0, vy - h);
       pop.style.left = L + 'px';
       pop.style.top = T + 'px';
 
-      document.addEventListener('mousedown', onOutside, true);
-      document.addEventListener('keydown', onKey, true);
+      doc.addEventListener('mousedown', onOutside, true);
+      doc.addEventListener('keydown', onKey, true);
 
       // NO popup pump (docs/features/async/17 S4): the top-level tick is the
       // sole dispatcher and keeps the app painting while DoPopupMenu's chain
@@ -1548,7 +1605,7 @@
         }
       });
       el.appendChild(btn);
-      requestAnimationFrame(function () {
+      raf(function () {   // KICLOUD: S4.8
         registryRegister(domId + ':menubartitle:' + idx, Object.assign({
           elementType: 'menuitem', subType: 'menubar',
           label: m.title, tooltip: '', enabled: true,
@@ -1607,7 +1664,7 @@
         dispatch(domId, EVT.TOOL);
       });
       el.appendChild(btn);
-      requestAnimationFrame(function () {
+      raf(function () {   // KICLOUD: S4.8
         if (!btn.isConnected) return;
         registryRegister(domId + ':tool:' + idx, Object.assign({
           elementType: 'tool', subType: t.kind === 'toggle' ? 'toggle' : 'button',
@@ -1632,7 +1689,7 @@
   // subType 'selected'/'button' — the same contract the canvas port's
   // notebook keeps, so clickTab() works unchanged.
   function scheduleTabRegistry(domId, el) {
-    requestAnimationFrame(function () {
+    raf(function () {   // KICLOUD: S4.8
       var reg = window.wxElementRegistry;
       if (!reg || !el.isConnected || !el._wxTabs) return;
       var stale = [];
@@ -1660,7 +1717,7 @@
   // singleline/multiline). Keeps clickSpinUp()/findSingleLineTextCtrl()
   // and friends working against the same registry contract.
   function scheduleControlRegistry(domId, el) {
-    requestAnimationFrame(function () {
+    raf(function () {   // KICLOUD: S4.8
       var reg = window.wxElementRegistry;
       if (!reg || !el.isConnected) return;
       var stale = [];
@@ -1830,26 +1887,35 @@
   var tooltipEl = null;
   var tooltipHoverTimer = null;
 
-  function ensureTooltipEl() {
-    if (!tooltipEl) {
-      tooltipEl = document.createElement('div');
-      tooltipEl.id = 'wx-tooltip';
-      tooltipEl.style.cssText =
+  // KICLOUD: S4.8: the tooltip element of document doc (one per document an editor is drawn
+  // into); tooltipEl is the one shown last, which the hide functions below hide.
+  function ensureTooltipEl(doc) {
+    doc = doc || document;
+    var el = doc.getElementById('wx-tooltip');
+    if (!el) {
+      el = doc.createElement('div');
+      el.id = 'wx-tooltip';
+      el.style.cssText =
         'position:fixed;z-index:20000;display:none;' +
         'background:#ffffe1;color:#000;border:1px solid #000;' +
         'padding:2px 4px;font:12px sans-serif;white-space:pre;' +
         'pointer-events:none;max-width:400px;';
-      document.body.appendChild(tooltipEl);
+      doc.body.appendChild(el);
     }
-    return tooltipEl;
+    if (tooltipEl && tooltipEl !== el) tooltipEl.style.display = 'none';
+    tooltipEl = el;
+    return el;
   }
 
   // x/y: #canvas-relative (wx screen) coordinates.
   window.wxDomTooltipShow = function (text, x, y) {
     if (!text) return;
-    var el = ensureTooltipEl();
+    // KICLOUD: S4.8: in the document that shows the point (a torn-off window's, too)
+    var at = frames ? frames.screenToClient(x, y) : null;
+    var doc = at ? at.doc : document, view = at ? at.win : window;
+    var el = ensureTooltipEl(doc);
     var c = Module['canvas'];
-    var base = c ? c.getBoundingClientRect() : { left: 0, top: 0 };
+    var base = at ? { left: at.x - x, top: at.y - y } : (c ? c.getBoundingClientRect() : { left: 0, top: 0 });
     el.textContent = text;
     el.style.display = 'block';
     var px = base.left + x + 2;
@@ -1857,10 +1923,10 @@
     el.style.left = '0px';
     el.style.top = '0px';
     var r = el.getBoundingClientRect();
-    if (px + r.width > window.innerWidth - 4) {
-      px = Math.max(4, window.innerWidth - r.width - 4);
+    if (px + r.width > view.innerWidth - 4) {
+      px = Math.max(4, view.innerWidth - r.width - 4);
     }
-    if (py + r.height > window.innerHeight - 4) {
+    if (py + r.height > view.innerHeight - 4) {
       py = base.top + y - r.height - 6;
     }
     el.style.left = px + 'px';
@@ -1877,12 +1943,15 @@
 
   // Any press/keystroke/scroll dismisses the tooltip (capture phase so
   // stopPropagation in control listeners can't keep it alive).
-  ['mousedown', 'keydown', 'wheel'].forEach(function (evName) {
-    document.addEventListener(evName, function () {
-      if (tooltipEl && tooltipEl.style.display !== 'none') {
-        tooltipEl.style.display = 'none';
-      }
-    }, true);
+  // KICLOUD: S4.8: in every document an editor is drawn into
+  onEveryDocument(function (doc, win, opts) {
+    ['mousedown', 'keydown', 'wheel'].forEach(function (evName) {
+      doc.addEventListener(evName, function () {
+        if (tooltipEl && tooltipEl.style.display !== 'none') {
+          tooltipEl.style.display = 'none';
+        }
+      }, opts({ capture: true }));
+    });
   });
 
   // Hover tooltips for JS-built surfaces that aren't wx windows
@@ -1893,6 +1962,12 @@
       tooltipHoverTimer = setTimeout(function () {
         var text = getText();
         if (!text) return;
+        // KICLOUD: S4.8: the pointer's wx screen point, in whichever document the tool is
+        if (frames) {
+          var at = frames.clientToScreen(el.ownerDocument, ev.clientX, ev.clientY);
+          window.wxDomTooltipShow(text, Math.round(at.x), Math.round(at.y));
+          return;
+        }
         var c = Module['canvas'];
         var base = c ? c.getBoundingClientRect() : { left: 0, top: 0 };
         window.wxDomTooltipShow(text,
@@ -1936,13 +2011,20 @@
     if (!canvasRect) canvasRect = c.getBoundingClientRect();
     var mods = (ev.ctrlKey ? 1 : 0) | (ev.shiftKey ? 2 : 0) |
                (ev.altKey ? 4 : 0) | (ev.metaKey ? 8 : 0);
+    // KICLOUD: S4.8: a control of a torn-off window: that document's point in wx screen coords
+    var doc = ev.target && ev.target.ownerDocument;
+    var sx = ev.clientX - canvasRect.left, sy = ev.clientY - canvasRect.top;
+    if (frames && doc && doc !== document) {
+      var at = frames.clientToScreen(doc, ev.clientX, ev.clientY);
+      sx = at.x; sy = at.y;
+    }
     try {
       return Module['ccall']('wx_dom_mouse', 'number',
         ['number', 'number', 'number', 'number',
          'number', 'number', 'number', 'number'],
         [kind,
-         Math.round(ev.clientX - canvasRect.left),
-         Math.round(ev.clientY - canvasRect.top),
+         Math.round(sx),
+         Math.round(sy),
          ev.button | 0, ev.buttons | 0, ev.detail | 0, mods, deltaY || 0]);
     } catch (e) {
       return 0;
@@ -1951,7 +2033,7 @@
 
   function forwardTarget(ev) {
     var t = ev.target;
-    if (!t || t === Module['canvas'] || !t.closest) return null;
+    if (!t || t === Module['canvas'] || !t.closest || ev.__wxFromSlot) return null;   // KICLOUD: S4.8
     if (t.closest('.wx-menu-popup')) return null;
     return t.closest('.wx-dom-control');
   }
@@ -1959,41 +2041,47 @@
   // Track the pointer everywhere (capture phase, including over the GAL
   // canvas where forwardTarget is null) so a "popup at the mouse" context
   // menu lands at the cursor.
+  // KICLOUD: S4.8: the event re-dispatched on #canvas from a torn-off window (wx.js
+  // __wxFromSlot) is not tracked: that window's own listener tracked the real pointer.
   function trackPointer(ev) {
+    if (ev.__wxFromSlot) return;
     lastPointerClientX = ev.clientX;
     lastPointerClientY = ev.clientY;
+    lastPointerDoc = (ev.target && ev.target.ownerDocument) || document;
   }
-  document.addEventListener('mousemove', trackPointer, true);
-  document.addEventListener('mousedown', trackPointer, true);
-  document.addEventListener('contextmenu', trackPointer, true);
+  // KICLOUD: S4.8: the listeners below exist in every document an editor is drawn into
+  onEveryDocument(function (doc, win, opts) {
+  doc.addEventListener('mousemove', trackPointer, opts({ capture: true }));
+  doc.addEventListener('mousedown', trackPointer, opts({ capture: true }));
+  doc.addEventListener('contextmenu', trackPointer, opts({ capture: true }));
 
-  document.addEventListener('mousemove', function (ev) {
+  doc.addEventListener('mousemove', function (ev) {
     if (forwardTarget(ev)) wxForwardMouse(ev, 1, 0);
-  });
+  }, opts());
 
   function forwardsLeft(ctl) {
     return !!(ctl.dataset.wxPassive || ctl.dataset.wxForwardLeft);
   }
 
-  document.addEventListener('mousedown', function (ev) {
+  doc.addEventListener('mousedown', function (ev) {
     var ctl = forwardTarget(ev);
     if (!ctl) return;
     if (ev.button !== 0 || forwardsLeft(ctl)) wxForwardMouse(ev, 2, 0);
-  });
+  }, opts());
 
-  document.addEventListener('mouseup', function (ev) {
+  doc.addEventListener('mouseup', function (ev) {
     var ctl = forwardTarget(ev);
     if (!ctl) return;
     if (ev.button !== 0 || forwardsLeft(ctl)) wxForwardMouse(ev, 3, 0);
-  });
+  }, opts());
 
-  document.addEventListener('wheel', function (ev) {
+  doc.addEventListener('wheel', function (ev) {
     var ctl = forwardTarget(ev);
     if (!ctl) return;
     // A natively scrollable element under the cursor (textarea, multi-
     // select, checklist) keeps its own wheel behavior.
     for (var n = ev.target; n; n = n.parentElement) {
-      var oy = getComputedStyle(n).overflowY;
+      var oy = styleOf(n).overflowY;
       if ((oy === 'auto' || oy === 'scroll') &&
           n.scrollHeight > n.clientHeight) {
         return;
@@ -2001,9 +2089,9 @@
       if (n === ctl) break;
     }
     if (wxForwardMouse(ev, 4, ev.deltaY)) ev.preventDefault();
-  }, { passive: false });
+  }, opts({ passive: false }));
 
-  document.addEventListener('contextmenu', function (ev) {
+  doc.addEventListener('contextmenu', function (ev) {
     var ctl = forwardTarget(ev);
     if (!ctl) return;
     var t = ev.target;
@@ -2012,5 +2100,6 @@
     // wx already received the right-click via the forwarded mousedown/up;
     // suppress the browser menu except over editables (keep native paste).
     if (!editable) ev.preventDefault();
+  }, opts());
   });
 })();

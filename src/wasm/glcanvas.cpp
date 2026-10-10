@@ -18,6 +18,7 @@
 #include "wx/glcanvas.h"
 #include "wx/toplevel.h"     // KICLOUD: B1.6d
 #include "wx/gdicmn.h"       // KICLOUD: A10, wxDisplayScaleFactor
+#include "wx/wasm/pageframes.h"     // KICLOUD: S4.8 (wxWasmWindowSlot)
 
 #ifndef WX_PRECOMP
     #include "wx/log.h"
@@ -408,15 +409,20 @@ bool wxGLCanvas::Create(wxWindow *parent,
         EM_ASM({ setGLCanvasZ($0, 100); }, m_cssId);
     }
 
-    // Position the GL canvas element to match this window's screen position
-    SyncCanvasElement();    // KICLOUD: A10
-
     // Set canvas selector to point to our dedicated GL canvas element
     char selectorBuf[64];
     snprintf(selectorBuf, sizeof(selectorBuf), "#glcanvas-%d", m_cssId);
     m_canvasTarget = selectorBuf;
 
-    return CreateWebGLContext(dispAttrs);
+    // KICLOUD: S4.8: the context is made first, while the canvas is still in the page's document,
+    // where emscripten_webgl_create_context looks it up by id: placing it (below) moves it into an
+    // attached window's document when its frame is torn off (wx/wasm/pageframes.h)
+    const bool created = CreateWebGLContext(dispAttrs);
+
+    // Position the GL canvas element to match this window's screen position
+    SyncCanvasElement();    // KICLOUD: A10
+
+    return created;
 }
 
 bool wxGLCanvas::Create(wxWindow *parent,
@@ -512,10 +518,14 @@ void wxGLCanvas::SyncCanvasElement()
     backing.x *= scale;
     backing.y *= scale;
 
+    // KICLOUD: S4.8 (docs/patches.md, wx/wasm/pageframes.h): with the slot (attached window) the
+    // canvas's frame is drawn in. The canvas is always created in the page's document (where
+    // emscripten_webgl_create_context finds it by id); wx.js then moves it, with its context, into
+    // that slot's document.
     EM_ASM({
-        setGLCanvasRect($0, $1, $2, $3, $4, $5, $6, $7);
+        setGLCanvasRect($0, $1, $2, $3, $4, $5, $6, $7, $8);
     }, m_cssId, screenPos.x, screenPos.y, clientSize.GetWidth(), clientSize.GetHeight(),
-       backing.x, backing.y, scale);
+       backing.x, backing.y, scale, wxWasmWindowSlot(this));
 }
 
 bool wxGLCanvas::Show(bool show)

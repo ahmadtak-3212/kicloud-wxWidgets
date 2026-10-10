@@ -466,6 +466,350 @@ if (typeof navigator !== 'undefined') {
              top: canvasRect.top - containerRect.top };
   };
 
+  // ---------------------------------------------------------------------------
+  // KICLOUD: S4.8 (docs/patches.md, docs/future-features/FEATURE_AI_INTEGRATION.md §6):
+  // attached windows ("frame slots").
+  //
+  // An editor tab can be torn off into a second browser window (window.open, same origin). There
+  // is still ONE engine, in this document: the second window holds no KiCad. Its document becomes
+  // a "frame slot" that this port draws a page frame (and that frame's dialogs, popups and GL
+  // canvases) into, and whose keyboard and mouse it listens to.
+  //
+  // Coordinates. wx screen coordinates stay one flat space. Slot 0 is this document (the
+  // #canvas-relative space it always had). Slot n >= 1 owns the screen area that starts at
+  // x = n * WX_SLOT_STRIDE (y = 0) and is as large as that window's viewport. A window's DOM
+  // element lives in the document of the slot its top-level ancestor is in (C++ passes the slot
+  // to setWindowRect and setGLCanvasRect, src/wasm/toplevel.cpp wxWasmWindowSlot), so hit-testing
+  // (wxFindWindowAtPoint), centring and the "keep on the page" rule all keep working unchanged:
+  // the slot's area simply lies far to the right of the main page.
+  //
+  // The page of the window decides where in it the editor is drawn: an element with the id
+  // wx-frame-stage (positioned; the editor fills it), or else the whole viewport.
+  //
+  // Input. Mouse events on an attached document land on a full-size stand-in for #canvas
+  // (#wx-frame-canvas) and are re-dispatched on this document's #canvas at the matching wx screen
+  // point, so the Emscripten callbacks of src/wasm/app.cpp handle them exactly as before. Keys on
+  // the attached window are re-dispatched on this window; window.__wxKeyDocument tells
+  // KeyCallback which document's focus to check (a DOM text field of a torn-off dialog).
+  //
+  // Lifetime. wxAttachFrameDocument(win) registers a window and returns its slot; every listener
+  // it adds is removed by wxDetachFrameDocument(slot) (an AbortController). Elements still in a
+  // slot when it is detached are moved back by C++ first (wxWasmAttachPageFrame(key, 0)); a closed
+  // window's elements are still referenced by windowMap and glCanvasMap, so they can be moved back.
+  // Security: only same-origin windows can be attached (their document is read directly); the
+  // shell opens them itself (web/editor/shell/frame-window.html).
+  // ---------------------------------------------------------------------------
+  var WX_SLOT_STRIDE = 65536;
+  var frameSlots = new Map();   // slot (>= 1) -> {win, doc, stage, container, proxy, abort}
+  var frameDocHooks = [];       // function (doc, win, slot, signal), see wxFrames.eachDocument
+
+  // The slot of a document: 0 for this page's own document and for any document not attached.
+  var wxSlotOfDocument = function (doc) {
+    if (!doc || (typeof document !== 'undefined' && doc === document)) return 0;
+    var found = 0;
+    frameSlots.forEach(function (s, slot) { if (s.doc === doc) found = slot; });
+    return found;
+  };
+
+  // The slot whose screen area holds wx screen x (0 when that slot is not attached).
+  var wxSlotAtScreen = function (x) {
+    var slot = Math.floor(x / WX_SLOT_STRIDE);
+    return slot > 0 && frameSlots.has(slot) ? slot : 0;
+  };
+
+  // The document / window / #window-container of a slot (slot 0 or an unknown slot: this page's).
+  var wxSlotDocument = function (slot) {
+    var s = frameSlots.get(slot);
+    return s ? s.doc : document;
+  };
+  var wxSlotWindow = function (slot) {
+    var s = frameSlots.get(slot);
+    return s ? s.win : window;
+  };
+  var wxSlotContainer = function (slot) {
+    var s = frameSlots.get(slot);
+    return s ? s.container : document.getElementById('window-container');
+  };
+
+  // wxScreenBase for the document of `slot`: the offset that maps wx screen coords into the
+  // element's CSS frame there. An attached document's #window-container (and its viewport, for
+  // fixed popups) starts at the slot's screen origin.
+  var wxScreenBaseOf = function (slot, isFixed) {
+    var s = slot ? frameSlots.get(slot) : null;
+    if (!s) return wxScreenBase(isFixed);
+    if (!isFixed) return { left: -slot * WX_SLOT_STRIDE, top: 0 };
+    var r = wxStageRect(s);
+    return { left: r.left - slot * WX_SLOT_STRIDE, top: r.top };
+  };
+
+  // The viewport rect of a slot's stage (the area its editor fills).
+  var wxStageRect = function (s) {
+    try { return s.stage.getBoundingClientRect(); } catch (e) { return { left: 0, top: 0, width: 0, height: 0 }; }
+  };
+
+  // A viewport (client) point of `doc` -> wx screen coords {x, y}.
+  var wxClientToScreen = function (doc, clientX, clientY) {
+    var slot = wxSlotOfDocument(doc);
+    if (slot) {
+      var sr = wxStageRect(frameSlots.get(slot));
+      return { x: clientX - sr.left + slot * WX_SLOT_STRIDE, y: clientY - sr.top };
+    }
+    var r = document.getElementById('canvas').getBoundingClientRect();
+    return { x: clientX - r.left, y: clientY - r.top };
+  };
+
+  // wx screen coords -> {doc, win, x, y}: the document showing that point and the viewport point
+  // in it.
+  var wxScreenToClient = function (x, y) {
+    var slot = wxSlotAtScreen(x);
+    if (slot) {
+      var sr = wxStageRect(frameSlots.get(slot));
+      return { doc: wxSlotDocument(slot), win: wxSlotWindow(slot), x: x - slot * WX_SLOT_STRIDE + sr.left, y: y + sr.top };
+    }
+    var c = document.getElementById('canvas');
+    var r = c ? c.getBoundingClientRect() : { left: 0, top: 0 };
+    return { doc: document, win: window, x: x + r.left, y: y + r.top };
+  };
+
+  // The computed style of an element of any attached document (each document computes its own).
+  var wxStyleOf = function (el) {
+    var view = el && el.ownerDocument && el.ownerDocument.defaultView;
+    return (view || window).getComputedStyle(el);
+  };
+
+  // requestAnimationFrame that still fires while this page is hidden: the first animation frame
+  // of this window or of any attached visible window runs cb (once); the others are cancelled.
+  // Used for this port's own small deferrals (barrier recompute, registry updates, a drag's
+  // coalescing): with "Open in new tab" this page is a hidden tab whose own frames never come.
+  var wxRequestFrame = function (cb) {
+    var sources = [window];
+    frameSlots.forEach(function (s) {
+      try { if (!s.win.closed && s.doc.visibilityState === 'visible') sources.push(s.win); } catch (e) { /* closing */ }
+    });
+    if (sources.length === 1) return window.requestAnimationFrame(cb);
+    var done = false, ids = [];
+    sources.forEach(function (w, i) {
+      try {
+        ids[i] = w.requestAnimationFrame(function (t) {
+          if (done) return;
+          done = true;
+          sources.forEach(function (o, j) { if (j !== i) { try { o.cancelAnimationFrame(ids[j]); } catch (e) { /* closed */ } } });
+          cb(t);
+        });
+      } catch (e) { /* a window closed in between */ }
+    });
+    return 0;
+  };
+
+  // Copy this port's injected <style> elements (window chrome, DOM-control theme) into doc.
+  var wxCopyPortStyles = function (doc) {
+    Array.prototype.forEach.call(document.querySelectorAll('style[id^="wx-"]'), function (s) {
+      if (!doc.getElementById(s.id)) doc.head.appendChild(doc.importNode(s, true));
+    });
+  };
+
+  // A legacy key property (keyCode, charCode, which) the KeyboardEvent constructor ignores.
+  var wxDefine = function (ev, name, value) {
+    try { Object.defineProperty(ev, name, { get: function () { return value; } }); } catch (e) { /* frozen */ }
+  };
+
+  // Register window `win` (same origin, already loaded) as a frame slot. Builds its stand-ins for
+  // #canvas and #window-container, copies the port's styles, and wires its input to the engine.
+  // Returns the slot number (>= 1), or 0 when win cannot be used. State: frameSlots; hooks run.
+  var wxAttachFrameDocument = function (win) {
+    var doc;
+    try { doc = win.document; } catch (e) { return 0; }   // another origin: never attached
+    if (!doc || !doc.body) return 0;
+    var existing = wxSlotOfDocument(doc);
+    if (existing) return existing;
+    var slot = 1;
+    while (frameSlots.has(slot)) slot++;
+    var abort = new AbortController();
+    var opt = { signal: abort.signal };
+
+    wxCopyPortStyles(doc);
+    // The stage: the page's #wx-frame-stage (it must be positioned), or the viewport
+    var stage = doc.getElementById('wx-frame-stage');
+    var pos = stage ? 'absolute' : 'fixed';
+    if (!stage) stage = doc.body;
+    var proxy = doc.createElement('div');
+    proxy.id = 'wx-frame-canvas';
+    proxy.style.cssText = 'position:' + pos + ';left:0;top:0;right:0;bottom:0;z-index:0;';
+    stage.appendChild(proxy);
+    var container = doc.createElement('div');
+    container.id = 'window-container';
+    container.style.cssText = 'position:' + pos + ';left:0;top:0;width:0;height:0;z-index:1;';
+    stage.appendChild(container);
+    var entry = { win: win, doc: doc, stage: stage === doc.body ? proxy : stage, container: container, proxy: proxy, abort: abort };
+
+    // Mouse: the same event, on #canvas, at the same wx screen point.
+    var forwardMouse = function (ev) {
+      var c = Module['canvas'];
+      if (!c) return;
+      var r = c.getBoundingClientRect();
+      var at = wxClientToScreen(doc, ev.clientX, ev.clientY);
+      var sx = at.x, sy = at.y;
+      var init = { bubbles: ev.bubbles, cancelable: true, view: window,
+                   clientX: sx + r.left, clientY: sy + r.top, screenX: ev.screenX, screenY: ev.screenY,
+                   button: ev.button, buttons: ev.buttons, detail: ev.detail,
+                   ctrlKey: ev.ctrlKey, shiftKey: ev.shiftKey, altKey: ev.altKey, metaKey: ev.metaKey,
+                   movementX: ev.movementX, movementY: ev.movementY };
+      var out;
+      if (ev.type === 'wheel') {
+        init.deltaX = ev.deltaX; init.deltaY = ev.deltaY; init.deltaZ = ev.deltaZ; init.deltaMode = ev.deltaMode;
+        out = new WheelEvent('wheel', init);
+      } else {
+        out = new MouseEvent(ev.type, init);
+      }
+      out.__wxFromSlot = slot;   // wx-dom.js's pointer tracking already saw the original
+      if (ev.type === 'mousedown') wxNoteSlotInput(slot);
+      if (!c.dispatchEvent(out)) ev.preventDefault();
+    };
+    ['mousedown', 'mouseup', 'mousemove', 'mouseenter', 'mouseleave', 'wheel'].forEach(function (type) {
+      proxy.addEventListener(type, forwardMouse, { signal: abort.signal, passive: false });
+    });
+    proxy.addEventListener('contextmenu', function (ev) { ev.preventDefault(); }, opt);
+
+    // Keys: the same event on this window, whose Emscripten callback (KeyCallback) then checks
+    // the focus in `doc` (window.__wxKeyDocument). A key a DOM text field keeps never gets here:
+    // wx-dom.js's own listener on the field stops it.
+    ['keydown', 'keyup', 'keypress'].forEach(function (type) {
+      win.addEventListener(type, function (ev) {
+        var out = new KeyboardEvent(type, { bubbles: true, cancelable: true, key: ev.key, code: ev.code,
+          location: ev.location, repeat: ev.repeat, isComposing: ev.isComposing,
+          ctrlKey: ev.ctrlKey, shiftKey: ev.shiftKey, altKey: ev.altKey, metaKey: ev.metaKey });
+        wxDefine(out, 'keyCode', ev.keyCode);
+        wxDefine(out, 'charCode', ev.charCode);
+        wxDefine(out, 'which', ev.which);
+        window.__wxKeyDocument = doc;
+        var allowed;
+        try { allowed = window.dispatchEvent(out); } finally { window.__wxKeyDocument = null; }
+        if (!allowed) ev.preventDefault();
+      }, opt);
+    });
+
+    // The window's own size is the slot's screen size; focusing it makes its frame the active one.
+    var ccall = function (name, slotArg) {
+      try { if (typeof Module !== 'undefined' && Module.ccall) Module.ccall(name, null, ['number'], [slotArg]); } catch (e) { /* the engine is gone */ }
+    };
+    win.addEventListener('resize', function () { ccall('wx_frame_slot_resized', slot); }, opt);
+    if (typeof win.ResizeObserver === 'function') {
+      // the stage can change size without the window doing so (the page's own bars)
+      var ro = new win.ResizeObserver(function () { ccall('wx_frame_slot_resized', slot); });
+      ro.observe(entry.stage);
+      abort.signal.addEventListener('abort', function () { ro.disconnect(); });
+    }
+    win.addEventListener('focus', function () { wxNoteSlotInput(slot); ccall('wx_frame_slot_focused', slot); }, opt);
+
+    frameSlots.set(slot, entry);
+    // The scheduler (jspi-scheduler.js) also takes its animation frames and timers from this window, so the engine keeps
+    // running while this page is hidden (the "Open in new tab" case) and the window is visible.
+    try { if (globalThis.__wxScheduler && globalThis.__wxScheduler.attachFrameWindow) globalThis.__wxScheduler.attachFrameWindow(win); } catch (e) { /* older shim */ }
+    if (Module.canvas && Module.canvas.style.cursor) proxy.style.cursor = Module.canvas.style.cursor;
+    frameDocHooks.forEach(function (hook) {
+      try { hook(doc, win, slot, abort.signal); } catch (e) { console.error('wx frame document hook', e); }
+    });
+    return slot;
+  };
+
+  // Forget slot `slot`: remove its listeners and stand-ins. C++ has moved its windows back to
+  // slot 0 before (wxWasmAttachPageFrame(key, 0)). Safe on a closed window and to call twice.
+  var wxDetachFrameDocument = function (slot) {
+    var s = frameSlots.get(slot);
+    if (!s) return;
+    frameSlots.delete(slot);
+    s.abort.abort();
+    try { if (globalThis.__wxScheduler && globalThis.__wxScheduler.detachFrameWindow) globalThis.__wxScheduler.detachFrameWindow(s.win); } catch (e) { /* older shim */ }
+    try { s.proxy.remove(); s.container.remove(); } catch (e) { /* the window is gone */ }
+    if (lastInputSlot === slot) lastInputSlot = 0;
+  };
+
+  // The slot that last had a click or the focus (for a window without a parent, see
+  // wxWasmActiveSlot in src/wasm/toplevel.cpp, and for the clipboard).
+  var lastInputSlot = 0;
+  var wxNoteSlotInput = function (slot) { lastInputSlot = slot; };
+
+  // The clipboard of the window that has the focus: navigator.clipboard refuses a document
+  // without the focus, and with a torn-off editor the focus is in that window.
+  var wxFocusedClipboard = function () {
+    var best = navigator.clipboard;
+    frameSlots.forEach(function (s) {
+      try { if (s.doc.hasFocus() && s.win.navigator.clipboard) best = s.win.navigator.clipboard; } catch (e) { /* closing */ }
+    });
+    return best;
+  };
+
+  // The viewport size of a slot's window, for C++ (wxWasmSlotRect). which: 0 width, 1 height.
+  // KICLOUD: S4.8: while this page is hidden the slot keeps the size it had (at first: this page's own
+  // size, which the frame has when it arrives): a new size would resize the frame's GL canvases, and
+  // Chromium cannot resize a WebGL canvas of a hidden page (see setGLCanvasRect). The frame then shows
+  // at that size in its window (a strip of the window may stay empty) and takes the window's size as
+  // soon as this page is visible again (wxApplyDeferredBacking asks every slot to resize).
+  var wxFrameSlotSize = function (slot, which) {
+    var s = frameSlots.get(slot);
+    if (!s) return 0;
+    if (document.visibilityState !== 'hidden' || !s.size) {
+      var r = wxStageRect(s);
+      if (document.visibilityState === 'hidden' && !s.size) {
+        var mw = document.getElementById('main-window');
+        r = mw ? { width: mw.offsetWidth, height: mw.offsetHeight } : r;
+      }
+      s.size = { width: Math.max(0, Math.floor(r.width)), height: Math.max(0, Math.floor(r.height)) };
+    }
+    if (document.visibilityState === 'hidden') wxDeferBackingUntilVisible();
+    return which ? s.size.height : s.size.width;
+  };
+
+  // Move a window or GL canvas element into the #window-container of `slot` (when it is not
+  // there yet). A text field's <datalist> must be in the field's own document: it moves along.
+  var wxMoveToSlot = function (el, slot) {
+    var container = wxSlotContainer(slot);
+    if (!el || !container || el.parentNode === container) return;
+    var oldDoc = el.ownerDocument;
+    container.appendChild(el);
+    if (el.querySelectorAll && oldDoc !== container.ownerDocument) {
+      Array.prototype.forEach.call(el.querySelectorAll('input[list]'), function (input) {
+        var dl = oldDoc.getElementById(input.getAttribute('list'));
+        if (dl) container.ownerDocument.body.appendChild(dl);
+      });
+    }
+  };
+
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    window.wxAttachFrameDocument = wxAttachFrameDocument;
+    window.wxDetachFrameDocument = wxDetachFrameDocument;
+    // For wx-dom.js and the page (native-startup.js): the slot helpers above.
+    window.wxFrames = {
+      STRIDE: WX_SLOT_STRIDE,
+      slotOfDocument: wxSlotOfDocument,
+      slotAtScreen: wxSlotAtScreen,
+      document: wxSlotDocument,
+      window: wxSlotWindow,
+      clientToScreen: wxClientToScreen,
+      screenToClient: wxScreenToClient,
+      requestFrame: wxRequestFrame,
+      styleOf: wxStyleOf,
+      slots: function () { return Array.from(frameSlots.keys()); },
+      lastInputSlot: function () { return lastInputSlot; },
+      // Run hook(doc, win, slot, signal) for this document now (slot 0, no signal) and for every
+      // document attached later (signal aborts when it is detached): for document-wide
+      // listeners that must exist in every document an editor is drawn into.
+      eachDocument: function (hook) {
+        frameDocHooks.push(hook);
+        try { hook(document, window, 0, null); } catch (e) { console.error('wx frame document hook', e); }
+        frameSlots.forEach(function (s, slot) {
+          try { hook(s.doc, s.win, slot, s.abort.signal); } catch (e) { console.error('wx frame document hook', e); }
+        });
+      }
+    };
+    // Focusing this window makes slot 0 the active one again (only matters while slots exist).
+    window.addEventListener('focus', function () {
+      if (!frameSlots.size) return;
+      wxNoteSlotInput(0);
+      try { if (typeof Module !== 'undefined' && Module.ccall) Module.ccall('wx_frame_slot_focused', null, ['number'], [0]); } catch (e) { /* booting */ }
+    });
+  }
+
   /* wxNonOwnedWindow */
 
   // Ensure #window-container creates a stacking context so GL canvases
@@ -727,18 +1071,25 @@ if (typeof navigator !== 'undefined') {
     recomputeModalBarrier();
   };
 
-  var setWindowRect = function (id, x, y, width, height) {
+  // KICLOUD: S4.8: slot is the frame slot (attached window) the window's top-level ancestor is
+  // in (src/wasm/nonownedwnd.cpp passes wxWasmWindowSlot); its element moves into that slot's
+  // document first. Undefined (an older caller): the slot it is in already.
+  var setWindowRect = function (id, x, y, width, height, slot) {
     //console.log('setWindowRect: ' + id + ' (' + x + ', ' + y + ', ' + width + ', ' + height + ')');
 
     var windowData = windowMap.get(id);
 
     var window = windowData.window;
+    if (id !== 0 && typeof slot === 'number') {
+      wxMoveToSlot(window, slot);   // KICLOUD: S4.8
+      windowData.slot = slot;
+    }
     if (id === 0) {
       // The main window owns #canvas — it DEFINES the wx screen origin.
       window.style.left = x + 'px';
       window.style.top = y + 'px';
     } else {
-      var base = wxScreenBase(window.style.position === 'fixed');
+      var base = wxScreenBaseOf(windowData.slot || 0, window.style.position === 'fixed');   // KICLOUD: S4.8
       window.style.left = (x + base.left) + 'px';
       window.style.top = (y + base.top) + 'px';
     }
@@ -877,13 +1228,14 @@ if (typeof navigator !== 'undefined') {
       // Place the window's top-left so the grab point stays under the cursor,
       // in wx screen coords (#canvas-relative CSS px) — the inverse of
       // setWindowRect's wxScreenBase anchoring.
-      var canvasRect = document.getElementById('canvas').getBoundingClientRect();
-      pendingX = Math.round(ev.clientX - grabDX - canvasRect.left);
-      pendingY = Math.round(ev.clientY - grabDY - canvasRect.top);
+      // KICLOUD: S4.8: in whichever document (frame slot) the window is drawn
+      var at = wxClientToScreen(win.ownerDocument, ev.clientX - grabDX, ev.clientY - grabDY);
+      pendingX = Math.round(at.x);
+      pendingY = Math.round(at.y);
       ev.stopPropagation();
       if (!rafPending) {
         rafPending = true;
-        requestAnimationFrame(flushMove);
+        wxRequestFrame(flushMove);   // KICLOUD: S4.8: also while this page is hidden
       }
     });
 
@@ -1021,17 +1373,18 @@ if (typeof navigator !== 'undefined') {
         // Convert the top-left back to wx screen coords (#canvas-relative CSS
         // px) — the inverse of setWindowRect's wxScreenBase anchoring, the
         // same transform the title-bar drag uses.
-        var canvasRect = document.getElementById('canvas').getBoundingClientRect();
+        // KICLOUD: S4.8: in whichever document (frame slot) the window is drawn
+        var at = wxClientToScreen(win.ownerDocument, left, top);
         pending = {
-          x: Math.round(left - canvasRect.left),
-          y: Math.round(top - canvasRect.top),
+          x: Math.round(at.x),
+          y: Math.round(at.y),
           w: Math.round(w),
           h: Math.round(h)
         };
         ev.stopPropagation();
         if (!rafPending) {
           rafPending = true;
-          requestAnimationFrame(flushResize);
+          wxRequestFrame(flushResize);   // KICLOUD: S4.8: also while this page is hidden
         }
       });
 
@@ -1088,7 +1441,7 @@ if (typeof navigator !== 'undefined') {
     for (const windowId of windowMap.keys()) {
       var windowData = windowMap.get(windowId);
       if (windowId !== id && windowData) {
-        var style = document.defaultView.getComputedStyle(windowData.window);
+        var style = wxStyleOf(windowData.window);   // KICLOUD: S4.8: any document
         var zIndex = parseInt(style.getPropertyValue('z-index'), 10);
         if (!isNaN(zIndex)) {
           maxZ = Math.max(maxZ, zIndex);
@@ -1099,7 +1452,7 @@ if (typeof navigator !== 'undefined') {
     // Also check z-index of GL canvases so popups can appear above them
     for (const [glId, canvas] of glCanvasMap.entries()) {
       if (canvas && canvas.style.display !== 'none') {
-        var style = document.defaultView.getComputedStyle(canvas);
+        var style = wxStyleOf(canvas);   // KICLOUD: S4.8: any document
         var zIndex = parseInt(style.getPropertyValue('z-index'), 10);
         if (!isNaN(zIndex)) {
           maxZ = Math.max(maxZ, zIndex);
@@ -1117,7 +1470,7 @@ if (typeof navigator !== 'undefined') {
     for (const windowId of windowMap.keys()) {
       var windowData = windowMap.get(windowId);
       if (windowId !== id && windowData) {
-        var style = document.defaultView.getComputedStyle(windowData.window);
+        var style = wxStyleOf(windowData.window);   // KICLOUD: S4.8: any document
         var zIndex = parseInt(style.getPropertyValue('z-index'), 10);
         if (!isNaN(zIndex)) {
           minZ = Math.min(minZ, zIndex);
@@ -1171,9 +1524,10 @@ if (typeof navigator !== 'undefined') {
         return;
       }
       if (el.style.display === 'none') return;
-      var z = parseInt(document.defaultView.getComputedStyle(el).zIndex, 10);
+      var z = parseInt(wxStyleOf(el).zIndex, 10);   // KICLOUD: S4.8: any document
       if (isNaN(z)) z = 0;
-      wins.push({ el: el, z: z, rect: el.getBoundingClientRect() });
+      // KICLOUD: S4.8: rects of different documents (frame slots) never overlap each other
+      wins.push({ el: el, z: z, rect: el.getBoundingClientRect(), doc: el.ownerDocument });
     });
 
     var modal = null;
@@ -1182,7 +1536,7 @@ if (typeof navigator !== 'undefined') {
     });
     wins.forEach(function (w) {
       var shadowed = wins.some(function (o) {
-        return o !== w && o.z > w.z && rectsOverlap(o.rect, w.rect);
+        return o !== w && o.doc === w.doc && o.z > w.z && rectsOverlap(o.rect, w.rect);
       }) || (modal !== null && w !== modal && w.z < modal.z);   // KICLOUD: P3-I T14
       w.el.classList.toggle('wx-inert', shadowed);
       // Also block focus/keyboard on the shadowed window where supported; the
@@ -1209,7 +1563,7 @@ if (typeof navigator !== 'undefined') {
           if (!covered && wins.length) {
             var cr = c.getBoundingClientRect();
             if (cr.width > 0 && cr.height > 0) {
-              covered = wins.some(function (w) { return rectsOverlap(w.rect, cr); });
+              covered = wins.some(function (w) { return w.doc === document && rectsOverlap(w.rect, cr); });   // KICLOUD: S4.8
             }
           }
           c.classList.toggle('wx-inert', covered);
@@ -1225,7 +1579,7 @@ if (typeof navigator !== 'undefined') {
   var wxScheduleBarrierRecompute = function () {
     if (typeof document === 'undefined' || barrierRecomputePending) return;
     barrierRecomputePending = true;
-    requestAnimationFrame(function () {
+    wxRequestFrame(function () {   // KICLOUD: S4.8: also while this page is hidden
       barrierRecomputePending = false;
       recomputeModalBarrier();
     });
@@ -1474,9 +1828,17 @@ if (typeof navigator !== 'undefined') {
   // pixel of the page. At a ratio of 1 or 2 both are what they were (backing = 1x or 2x the CSS
   // size, already on whole pixels). Without the three values (an older caller) the port's 1x/2x
   // scale is used as before.
-  var setGLCanvasRect = function (id, x, y, width, height, backingW, backingH, scale) {
+  // KICLOUD: S4.8: slot is the frame slot (attached window) of the canvas's top-level window
+  // (src/wasm/glcanvas.cpp passes wxWasmWindowSlot); the canvas moves into that document first.
+  // The WebGL context moves with its element and stays valid (TAB.0); KiCad redraws it.
+  var setGLCanvasRect = function (id, x, y, width, height, backingW, backingH, scale, slot) {
     var canvas = glCanvasMap.get(id);
     if (!canvas) return;
+    if (typeof slot === 'number') {
+      wxMoveToSlot(canvas, slot);
+      canvas.dataset.wxSlot = String(slot);
+    }
+    var canvasSlot = Number(canvas.dataset.wxSlot || 0);
 
     // Only position and show if we have valid dimensions
     if (width <= 0 || height <= 0) {
@@ -1497,14 +1859,15 @@ if (typeof navigator !== 'undefined') {
     // GL canvases are absolute children of #window-container — anchor them
     // the same way setWindowRect anchors window divs, so they stay glued to
     // their frame in hosts where the container is not at the canvas origin.
-    var base = wxScreenBase(false);
+    var base = wxScreenBaseOf(canvasSlot, false);   // KICLOUD: S4.8
     var left = x + base.left;
     var top = y + base.top;
     // KICLOUD: A10: round the corner's position in the top page to a device pixel. Where the
     // position already is on one (every ratio-1 and ratio-2 page here), nothing moves.
-    var container = document.getElementById('window-container');
+    // KICLOUD: S4.8: an attached window is a top page of its own (no frame to walk up)
+    var container = wxSlotContainer(canvasSlot);
     var crect = container.getBoundingClientRect();
-    var page = pageOffsetOfViewport();
+    var page = canvasSlot ? { left: 0, top: 0 } : pageOffsetOfViewport();
     var pageLeft = page.left + crect.left + container.clientLeft + left;
     var pageTop = page.top + crect.top + container.clientTop + top;
     left += Math.round(pageLeft * scale) / scale - pageLeft;
@@ -1518,8 +1881,21 @@ if (typeof navigator !== 'undefined') {
     // blank/flicker the 3D view on every pointermove during a title-bar drag (a
     // drag is a pure move — same size). Mirrors the guard in setWindowRect.
     if (canvas.width !== newW || canvas.height !== newH) {
-      canvas.width = newW;
-      canvas.height = newH;
+      // KICLOUD: S4.8: never while this page is hidden. A WebGL context belongs to the page it was made
+      // in; when that page is hidden (the editor opened in a new browser tab, or this window minimised
+      // while a torn-off window is in front), Chromium releases the context's drawing buffers, and
+      // giving the canvas a new size then blocks this page's main thread forever, waiting for the GPU
+      // process (seen in Chromium 153 with SwiftShader and with a hardware GPU: the torn-off window and
+      // this page froze). So the new size waits until this page is visible again (wxApplyDeferredBacking);
+      // meanwhile the canvas keeps its old drawing buffer, shown at its new CSS size.
+      if (canvasSlot && document.visibilityState === 'hidden') {
+        canvas.__wxDeferredBacking = { w: newW, h: newH, slot: canvasSlot };
+        wxDeferBackingUntilVisible();
+      } else {
+        canvas.width = newW;
+        canvas.height = newH;
+        canvas.__wxDeferredBacking = null;
+      }
     }
 
     // Show the canvas now that it's properly positioned
@@ -1527,6 +1903,33 @@ if (typeof navigator !== 'undefined') {
     if (canvas.dataset.shouldBeVisible !== 'false') {
       canvas.style.display = 'block';
     }
+  };
+
+  // KICLOUD: S4.8: give every GL canvas whose new size had to wait (setGLCanvasRect: this page was
+  // hidden) that size once this page is visible again, then ask its editor to draw again (the slot's
+  // resize handler re-lays out its page frame and repaints it). One listener, added on first use.
+  var deferredBackingListening = false;
+  var wxApplyDeferredBacking = function () {
+    if (document.visibilityState === 'hidden') return;
+    var slots = {};
+    glCanvasMap.forEach(function (canvas) {
+      var d = canvas.__wxDeferredBacking;
+      if (!d) return;
+      canvas.__wxDeferredBacking = null;
+      canvas.width = d.w;
+      canvas.height = d.h;
+      slots[d.slot] = true;
+    });
+    // every slot: its frame takes its window's size now (it kept its size while this page was hidden)
+    frameSlots.forEach(function (v, slot) { slots[slot] = true; });
+    Object.keys(slots).forEach(function (slot) {
+      try { Module.ccall('wx_frame_slot_resized', null, ['number'], [Number(slot)]); } catch (e) { /* the engine is gone */ }
+    });
+  };
+  var wxDeferBackingUntilVisible = function () {
+    if (deferredBackingListening) return;
+    deferredBackingListening = true;
+    document.addEventListener('visibilitychange', wxApplyDeferredBacking);
   };
 
   // KICLOUD: a GL canvas's stacking, set by its window's kind (glcanvas.cpp, B1.6d)
@@ -2214,6 +2617,7 @@ if (typeof navigator !== 'undefined') {
         cursor = '-webkit-' + cursor;
       }
       Module.canvas.style.cursor = cursor;
+      wxSetSlotCursors(cursor);   // KICLOUD: S4.8
     } else {
       var bitmap = bitmapMap.get(bitmapId);
 
@@ -2226,7 +2630,13 @@ if (typeof navigator !== 'undefined') {
       var dataUrl = 'url(' + canvas.toDataURL('image/png') + ')';
 
       Module.canvas.style.cursor = dataUrl + ' ' + hotSpotX + ' ' + hotSpotY + ', auto';
+      wxSetSlotCursors(Module.canvas.style.cursor);   // KICLOUD: S4.8
     }
+  };
+
+  // KICLOUD: S4.8: the attached windows' stand-ins for #canvas show the same cursor.
+  var wxSetSlotCursors = function (cursor) {
+    frameSlots.forEach(function (s) { try { s.proxy.style.cursor = cursor; } catch (e) { /* closing */ } });
   };
 
   var showFullscreen = function (enable) {
@@ -2246,7 +2656,9 @@ if (typeof navigator !== 'undefined') {
   };
 
   var showFileDialog = function (multiple) {
-    var input = document.createElement('input');
+    // KICLOUD: S4.8: in the document the person clicked last: a file chooser opens only from the
+    // document that has the click (user activation is per window)
+    var input = wxSlotDocument(lastInputSlot).createElement('input');
     if (multiple) {
       input.setAttribute('multiple', '');
     }

@@ -19,6 +19,11 @@
 #include "wx/wasm/pageframes.h"     // KICLOUD: B1.6d
 #include "wx/dialog.h"
 #include "wx/weakref.h"
+#include "wx/display.h"             // KICLOUD: S4.8 (wxDisplay::InvalidateCache)
+#include "wx/wasm/private/dispatch.h"   // KICLOUD: S4.8 (wxWasmModalTop)
+
+#include <map>                      // KICLOUD: S4.8
+#include <vector>                   // KICLOUD: S4.8
 
 #include <emscripten.h>
 #include <emscripten/html5.h>
@@ -64,6 +69,226 @@ void wxWasmSetNextPageFrame(const char* key)
 }
 
 // ----------------------------------------------------------------------------
+// KICLOUD: S4.8 (docs/patches.md): attached windows ("frame slots", wx/wasm/pageframes.h)
+// ----------------------------------------------------------------------------
+//
+// A page frame torn off into a second browser window lives in that window's "slot" (wx.js keeps
+// the windows: frameSlots). Its screen area starts at x = slot * wxWASM_SLOT_STRIDE. Two maps keep
+// which top-level windows have a slot of their own:
+//   - an attached page frame (wxWasmAttachPageFrame);
+//   - a window without a parent created while an attached window had the input last (a message
+//     box KiCad opens with no parent belongs where the person is working).
+// Every other window takes the slot of its top-level ancestor (wxWasmWindowSlot), so dialogs,
+// floating windows, popups and GL canvases follow their frame. Entries are erased when their
+// window is destroyed (~wxTopLevelWindowWasm) or moved back to the page.
+static std::map<const wxWindow*, int> gs_windowSlot;
+// The slot that had a click or the focus last (wx_frame_slot_focused); 0 is the page
+static int gs_activeSlot = 0;
+
+// True when wx.js has slot `slot` (a registered, still attached window)
+static bool wxWasmSlotAttached(int slot)
+{
+    if (slot <= 0)
+        return false;
+
+    return EM_ASM_INT({
+        return (typeof frameSlots !== 'undefined' && frameSlots.has($0)) ? 1 : 0;
+    }, slot) != 0;
+}
+
+wxVector<int> wxWasmAttachedSlots()
+{
+    wxVector<int> slots;
+    const int mask = EM_ASM_INT({
+        var m = 0;
+        if (typeof frameSlots !== 'undefined')
+            frameSlots.forEach(function (v, k) { if (k > 0 && k < 31) m |= (1 << k); });
+        return m;
+    });
+
+    for (int slot = 1; slot < 31; ++slot)
+    {
+        if (mask & (1 << slot))
+            slots.push_back(slot);
+    }
+
+    return slots;
+}
+
+wxRect wxWasmSlotRect(int slot)
+{
+    if (wxWasmSlotAttached(slot))
+    {
+        const int width = EM_ASM_INT({ return wxFrameSlotSize($0, 0); }, slot);
+        const int height = EM_ASM_INT({ return wxFrameSlotSize($0, 1); }, slot);
+        return wxRect(slot * wxWASM_SLOT_STRIDE, 0, wxMax(width, 1), wxMax(height, 1));
+    }
+
+    if (wxTheApp && wxTheApp->GetDisplay())
+        return wxRect(wxPoint(0, 0), wxTheApp->GetDisplay()->GetScreenSize());
+
+    return wxRect(0, 0, 0, 0);
+}
+
+int wxWasmWindowSlot(const wxWindow* win)
+{
+    if (gs_windowSlot.empty())
+        return 0;
+
+    // the window's top-level window, then the top-level window that one belongs to, and so on
+    for (const wxWindow* w = win; w; )
+    {
+        const wxWindow* tlw = w->IsTopLevel() ? w : wxGetTopLevelParent(const_cast<wxWindow*>(w));
+
+        if (!tlw)
+            break;
+
+        std::map<const wxWindow*, int>::const_iterator it = gs_windowSlot.find(tlw);
+
+        if (it != gs_windowSlot.end())
+            return it->second;
+
+        w = tlw->GetParent();
+    }
+
+    return 0;
+}
+
+// Tell the page about page frame `key` (window.wxWasmPageFrame(event, key, title, slot), see
+// wx/wasm/pageframes.h); the slot lets the page tell a torn-off frame from a tab.
+static void wxWasmNotifyPageFrame(const char* event, const wxString& key, const wxString& title,
+                                  int slot)
+{
+    EM_ASM({
+        if (typeof window !== 'undefined' && typeof window.wxWasmPageFrame === 'function')
+            window.wxWasmPageFrame(UTF8ToString($0), UTF8ToString($1), UTF8ToString($2), $3);
+    }, event, static_cast<const char *>(key.utf8_str()),
+       static_cast<const char *>(title.utf8_str()), slot);
+}
+
+// True when `win` belongs to `frame`: a window inside it, or a top-level window (dialog, floating
+// window, popup) whose parent chain reaches it.
+static bool wxWasmBelongsTo(const wxWindow* win, const wxWindow* frame)
+{
+    for (const wxWindow* w = win ? win->GetParent() : NULL; w; w = w->GetParent())
+    {
+        if (w == frame)
+            return true;
+    }
+
+    return false;
+}
+
+// The first shown wxGLCanvas inside `win` (found by class name, as wxWasmWindowHostsGLCanvas
+// does, so core does not link the GL library), or NULL.
+static wxWindow* wxWasmFirstGLCanvas(wxWindow* win, const wxClassInfo* cls)
+{
+    if (!win || !cls || !win->IsShown())
+        return NULL;
+
+    if (win->IsKindOf(cls))
+        return win;
+
+    for (wxWindowList::compatibility_iterator node = win->GetChildren().GetFirst(); node;
+         node = node->GetNext())
+    {
+        if (node->GetData()->IsTopLevel())
+            continue;
+
+        if (wxWindow* found = wxWasmFirstGLCanvas(node->GetData(), cls))
+            return found;
+    }
+
+    return NULL;
+}
+
+// The page frame shown in slot `slot`, or NULL. In the page (slot 0) it is the application's top
+// window when that is a page frame there.
+static wxTopLevelWindowWasm* wxWasmShownPageFrame(int slot)
+{
+    for (wxWindowList::compatibility_iterator node = wxTopLevelWindows.GetFirst(); node;
+         node = node->GetNext())
+    {
+        wxTopLevelWindowWasm* tlw = wxDynamicCast(node->GetData(), wxTopLevelWindowWasm);
+
+        if (tlw && tlw->IsPageFrame() && tlw->IsShown() && wxWasmWindowSlot(tlw) == slot)
+            return tlw;
+    }
+
+    return NULL;
+}
+
+bool wxWasmAttachPageFrame(const char* key, int slot)
+{
+    const wxString pageKey = wxString::FromUTF8(key ? key : "");
+    wxTopLevelWindowWasm* frame = NULL;
+
+    for (wxWindowList::compatibility_iterator node = wxTopLevelWindows.GetFirst(); node;
+         node = node->GetNext())
+    {
+        wxTopLevelWindowWasm* tlw = wxDynamicCast(node->GetData(), wxTopLevelWindowWasm);
+
+        if (tlw && tlw->IsPageFrame() && tlw->GetPageKey() == pageKey)
+            frame = tlw;
+    }
+
+    if (!frame || pageKey.empty() || slot < 0 || (slot > 0 && !wxWasmSlotAttached(slot)))
+        return false;
+
+    const int from = wxWasmWindowSlot(frame);
+
+    if (from == slot)
+        return true;
+
+    // The top-level windows that follow the frame (its dialogs, floating windows, popups), found
+    // before the move: they keep their place relative to the frame's screen area.
+    std::vector<wxWindow*> owned;
+
+    for (wxWindowList::compatibility_iterator node = wxTopLevelWindows.GetFirst(); node;
+         node = node->GetNext())
+    {
+        wxWindow* tlw = node->GetData();
+
+        if (tlw != frame && wxWasmBelongsTo(tlw, frame))
+            owned.push_back(tlw);
+    }
+
+    // Back into the page: hidden there first, so the page shows it as a tab again (or keeps the
+    // frame it shows); page frames are shown one at a time per slot.
+    if (slot == 0 && frame->IsShown())
+        frame->Show(false);
+
+    if (slot > 0)
+        gs_windowSlot[frame] = slot;
+    else
+        gs_windowSlot.erase(frame);
+
+    wxDisplay::InvalidateCache();
+
+    // The frame fills its slot; every move re-places the DOM elements in the slot's document
+    // (nonownedwnd.cpp setWindowRect, glcanvas.cpp setGLCanvasRect take the slot).
+    frame->SetSize(wxWasmSlotRect(slot));
+
+    const int dx = (slot - from) * wxWASM_SLOT_STRIDE;
+
+    for (size_t i = 0; i < owned.size(); ++i)
+    {
+        const wxRect r = owned[i]->GetRect();
+        owned[i]->Move(r.x + dx, r.y);
+    }
+
+    if (slot > 0)
+    {
+        if (!frame->IsShown())
+            frame->Show(true);      // a background tab torn off: shown in its window
+        else
+            wxWasmNotifyPageFrame("shown", frame->GetPageKey(), frame->GetTitle(), slot);
+    }
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------
 // KICLOUD: A14 (docs/patches.md): dialogs and floating windows stay on the page
 // ----------------------------------------------------------------------------
 //
@@ -78,15 +303,9 @@ void wxWasmSetNextPageFrame(const char* key)
 // Every change goes through SetSize(), so wx's own idea of the window's place (used to hit-test
 // canvas-drawn controls) and the DOM element (setWindowRect) always agree.
 
-// The size of the page in wx screen coordinates: the main window's size, which is the area every
-// top-level window is placed in. (0, 0) while the page has no layout (a hidden editor iframe).
-static wxSize wxWasmPageSize()
-{
-    if (wxTheApp && wxTheApp->GetDisplay())
-        return wxTheApp->GetDisplay()->GetScreenSize();
-
-    return wxSize(0, 0);
-}
+// KICLOUD: S4.8: the page's size is wxWasmSlotRect(0) (the main window's size, the area every
+// top-level window of the page is placed in; (0, 0) while the page has no layout, a hidden
+// editor iframe). An attached window's area is wxWasmSlotRect(its slot).
 
 // The width, in px, the window `cssId` needs so its DOM title bar shows its whole title: the
 // title text's own width and padding, plus the rest of the bar (the close button and its margin),
@@ -98,21 +317,25 @@ static wxSize wxWasmPageSize()
 static int wxWasmTitleBarWidth(int cssId)
 {
     return EM_ASM_INT({
-        var win = document.getElementById('window-' + $0);
+        // KICLOUD: S4.8: through the port's window map, as the element may be in an attached
+        // window's document
+        var win = window.__wxGetWindowElement ? window.__wxGetWindowElement($0)
+                                              : document.getElementById('window-' + $0);
         var bar = win ? win.querySelector(':scope > .window-titlebar') : null;
         var text = bar ? bar.querySelector(':scope > .window-titlebar-text') : null;
         if (!text || !text.getClientRects().length) {
             return 0;
         }
         var px = function (v) { return parseFloat(v || '0') || 0; };
-        var range = document.createRange();
+        var view = win.ownerDocument.defaultView || window;   // KICLOUD: S4.8
+        var range = win.ownerDocument.createRange();
         range.selectNodeContents(text);
-        var ts = getComputedStyle(text);
+        var ts = view.getComputedStyle(text);
         var need = range.getBoundingClientRect().width + px(ts.paddingLeft) + px(ts.paddingRight);
         for (var i = 0; i < bar.children.length; i++) {
             var child = bar.children[i];
             if (child !== text) {
-                var cs = getComputedStyle(child);
+                var cs = view.getComputedStyle(child);
                 need += child.offsetWidth + px(cs.marginLeft) + px(cs.marginRight);
             }
         }
@@ -133,11 +356,18 @@ static int wxWasmTitleBarWidth(int cssId)
 // complete size event of its own. Does nothing while the page has no size.
 static bool wxWasmKeepOnPage(wxTopLevelWindowWasm* win)
 {
-    const wxSize page = wxWasmPageSize();
+    // KICLOUD: S4.8: "the page" is the area of the window's slot (the page itself, or the
+    // attached window its frame was torn off into)
+    const wxRect area = wxWasmSlotRect(wxWasmWindowSlot(win));
+    const wxSize page = area.GetSize();
     if (page.x <= 0 || page.y <= 0)
         return false;
 
-    const wxRect rect = win->GetRect();     // a top-level window's rect is in screen coordinates
+    wxRect rect = win->GetRect();     // a top-level window's rect is in screen coordinates
+    // KICLOUD: S4.8: a window placed in another slot's area (KiCad restoring a dialog where it
+    // was last, in the other window) is first moved into the same place of its own slot
+    const int at = rect.x >= 0 ? rect.x / wxWASM_SLOT_STRIDE : 0;
+    rect.x -= (at - area.x / wxWASM_SLOT_STRIDE) * wxWASM_SLOT_STRIDE;
     int width = rect.width;
     int height = rect.height;
 
@@ -152,10 +382,11 @@ static bool wxWasmKeepOnPage(wxTopLevelWindowWasm* win)
     if (minSize.y != wxDefaultCoord)
         height = wxMax(height, minSize.y);
 
-    int x = wxMax(wxMin(rect.x, page.x - width), 0);
-    int y = wxMax(wxMin(rect.y, page.y - height), 0);
+    int x = wxMax(wxMin(rect.x, area.x + page.x - width), area.x);
+    int y = wxMax(wxMin(rect.y, area.y + page.y - height), area.y);
 
-    if (x == rect.x && y == rect.y && width == rect.width && height == rect.height)
+    if (x == rect.x && y == rect.y && width == rect.width && height == rect.height
+        && rect == win->GetRect())
         return false;
 
     win->SetSize(x, y, width, height);
@@ -187,6 +418,16 @@ bool wxTopLevelWindowWasm::Create(wxWindow *parent,
         position = wxPoint(0, 0);
     }
 
+    // KICLOUD: S4.8: a window without a parent opened while an attached window had the input
+    // last (a message box KiCad shows with no parent) opens there, where the person is working.
+    // Set before the base Create, whose first SetSize already places the element in that slot.
+    if (!parent && !IsPageFrame() && gs_activeSlot > 0 && wxWasmSlotAttached(gs_activeSlot))
+    {
+        gs_windowSlot[this] = gs_activeSlot;
+        const wxRect area = wxWasmSlotRect(gs_activeSlot);
+        position.x = (position.x == wxDefaultCoord ? 0 : position.x) + area.x;
+    }
+
     if (!size.IsFullySpecified())
     {
         // Query display size directly from wxTheApp if available.
@@ -207,6 +448,16 @@ bool wxTopLevelWindowWasm::Create(wxWindow *parent,
     }
 
     SetTitle(title);
+
+    // KICLOUD: S4.8: a page frame's element carries its key (data-wx-page), so the page can find a
+    // frame's own menu bar wherever it is drawn (a torn-off editor's window, wx/wasm/pageframes.h)
+    if (IsPageFrame())
+    {
+        EM_ASM({
+            var el = window.__wxGetWindowElement ? window.__wxGetWindowElement($0) : null;
+            if (el) el.setAttribute('data-wx-page', UTF8ToString($1));
+        }, GetCSSId(), static_cast<const char *>(m_pageKey.utf8_str()));
+    }
 
     // Non-main wxFrames get a real DOM title bar (drag handle + close "X")
     // instead of the canvas-painted one: a pointer-events:none canvas title bar
@@ -285,6 +536,8 @@ wxTopLevelWindowWasm::~wxTopLevelWindowWasm()
     // KICLOUD: a page frame closed: the page closes its tab (B1.6d)
     if (IsPageFrame())
         NotifyPage("closed");
+
+    gs_windowSlot.erase(this);      // KICLOUD: S4.8
 }
 
 // KICLOUD: a GL canvas is a DOM element of its own (not inside its window's element), shown
@@ -307,13 +560,10 @@ static void wxWasmSyncGLCanvases(wxWindow* win, const wxClassInfo* cls)
 }
 
 // KICLOUD: tell the page about a page frame (wx/wasm/pageframes.h, B1.6d)
+// KICLOUD: S4.8: with the slot it is shown in (0: the page, >= 1: an attached window)
 void wxTopLevelWindowWasm::NotifyPage(const char* event) const
 {
-    EM_ASM({
-        if (typeof window !== 'undefined' && typeof window.wxWasmPageFrame === 'function')
-            window.wxWasmPageFrame(UTF8ToString($0), UTF8ToString($1), UTF8ToString($2));
-    }, event, static_cast<const char *>(m_pageKey.utf8_str()),
-       static_cast<const char *>(m_title.utf8_str()));
+    wxWasmNotifyPageFrame(event, m_pageKey, m_title, wxWasmWindowSlot(this));
 }
 
 // KICLOUD: page frames are shown one at a time (B1.6d). Showing one fills the page with it,
@@ -334,6 +584,10 @@ bool wxTopLevelWindowWasm::Show(bool show)
         return changed;
     }
 
+    // KICLOUD: S4.8: page frames are shown one at a time PER SLOT: one in the page, and one in
+    // each attached window (a torn-off editor tab), so two can be on screen at once
+    const int slot = wxWasmWindowSlot(this);
+
     if (show)
     {
         for (wxWindowList::compatibility_iterator node = wxTopLevelWindows.GetFirst(); node;
@@ -341,15 +595,15 @@ bool wxTopLevelWindowWasm::Show(bool show)
         {
             wxTopLevelWindow* other = wxDynamicCast(node->GetData(), wxTopLevelWindow);
 
-            if (other && other != this && other->IsPageFrame() && other->IsShown())
+            if (other && other != this && other->IsPageFrame() && other->IsShown()
+                && wxWasmWindowSlot(other) == slot)
                 other->Show(false);
         }
 
-        if (wxTheApp && wxTheApp->GetDisplay())
-        {
-            const wxSize screen = wxTheApp->GetDisplay()->GetScreenSize();
-            SetSize(0, 0, screen.x, screen.y);
-        }
+        // KICLOUD: S4.8: it fills its slot (the page, or its attached window)
+        const wxRect area = wxWasmSlotRect(slot);
+        if (area.width > 0 && area.height > 0)
+            SetSize(area);
     }
     else
     {
@@ -405,7 +659,9 @@ bool wxTopLevelWindowWasm::Show(bool show)
                 dialog->Raise();
         }
 
-        if (wxTheApp)
+        // KICLOUD: S4.8: the page's own window is the top window the browser's resize, focus
+        // and file drops go to; a frame in an attached window is not
+        if (wxTheApp && slot == 0)
             wxTheApp->SetTopWindow(this);
 
         wxActivateEvent activate(wxEVT_ACTIVATE, true, GetId());
@@ -791,6 +1047,74 @@ void EMSCRIPTEN_KEEPALIVE wx_window_resize(int cssId, int x, int y, int width, i
         if (wxTheApp && !wxWasmWindowHostsGLCanvas(win))
             wxTheApp->Paint();
     }
+}
+
+// KICLOUD: S4.8 (wx/wasm/pageframes.h): an attached window (frame slot) was resized. Its page
+// frames fill it again and the displays (wxDisplay, one per slot) are measured again. Called by
+// wx.js on the window's resize event; the work runs on the event loop (CallAfter), as the call
+// can arrive in the middle of the application's own work. Safe as a plain ccall.
+void EMSCRIPTEN_KEEPALIVE wx_frame_slot_resized(int slot)
+{
+    if (!wxTheApp)
+        return;
+
+    wxTheApp->CallAfter([slot]()
+    {
+        wxDisplay::InvalidateCache();
+
+        const wxRect area = wxWasmSlotRect(slot);
+
+        if (slot <= 0 || area.x != slot * wxWASM_SLOT_STRIDE)
+            return;     // detached meanwhile
+
+        for (wxWindowList::compatibility_iterator node = wxTopLevelWindows.GetFirst(); node;
+             node = node->GetNext())
+        {
+            wxTopLevelWindowWasm* tlw = wxDynamicCast(node->GetData(), wxTopLevelWindowWasm);
+
+            if (tlw && tlw->IsPageFrame() && wxWasmWindowSlot(tlw) == slot)
+            {
+                tlw->SetSize(area);
+                tlw->Refresh();
+            }
+        }
+    });
+}
+
+// KICLOUD: S4.8: the browser window of slot `slot` (0: the page) got the focus. It becomes the
+// active slot (where a window without a parent opens), and the keyboard goes to the editor
+// shown there, as clicking into a desktop window activates it: when wx's focus is in another
+// slot, it moves to that frame's drawing canvas (a wxGLCanvas: KiCad's hotkeys) or the frame.
+// Runs on the event loop (CallAfter). Safe as a plain ccall.
+void EMSCRIPTEN_KEEPALIVE wx_frame_slot_focused(int slot)
+{
+    if (!wxTheApp)
+        return;
+
+    wxTheApp->CallAfter([slot]()
+    {
+        if (slot > 0 && !wxWasmSlotAttached(slot))
+            return;
+
+        gs_activeSlot = slot;
+
+        // a modal dialog keeps the keyboard, wherever it is (native ports disable the rest)
+        if (wxWasmModalTop())
+            return;
+
+        wxWindow* focus = wxWindow::FindFocus();
+
+        if (focus && wxWasmWindowSlot(focus) == slot)
+            return;
+
+        wxTopLevelWindowWasm* frame = wxWasmShownPageFrame(slot);
+
+        if (!frame || !frame->IsEnabled())
+            return;
+
+        wxWindow* canvas = wxWasmFirstGLCanvas(frame, wxClassInfo::FindClass(wxT("wxGLCanvas")));
+        (canvas ? canvas : static_cast<wxWindow*>(frame))->SetFocus();
+    });
 }
 
 } // extern "C"

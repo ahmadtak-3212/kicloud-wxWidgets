@@ -23,6 +23,7 @@
 
 #include "wx/private/eventloopsourcesmanager.h"
 #include "wx/wasm/private/dispatch.h"
+#include "wx/wasm/pageframes.h"     // KICLOUD: S4.8 (wxWasmWindowSlot)
 #include "wx/wasm/private/mailbox.h"
 
 #include <memory>   // KICLOUD: P3-I
@@ -686,8 +687,10 @@ void wxApp::HandleSizeEvent(const wxSizeEvent &event)
     GetDisplay()->SetScreenSize(newSize);
     GetDisplay()->UpdateScaleFactor();
 
+    // KICLOUD: S4.8 (wx/wasm/pageframes.h): a page frame torn off into an attached window
+    // (slot >= 1) follows that window's size (wx_frame_slot_resized), not the page's
     wxWindow *topWindow = GetTopWindow();
-    if (topWindow != NULL)
+    if (topWindow != NULL && wxWasmWindowSlot(topWindow) == 0)
     {
         //printf("SetSize %d %d\n", newSize.GetWidth(), newSize.GetHeight());
         topWindow->SetSize(0, 0, newSize.GetWidth(), newSize.GetHeight());
@@ -701,7 +704,7 @@ void wxApp::HandleSizeEvent(const wxSizeEvent &event)
     {
         wxTopLevelWindow* tlw = wxDynamicCast(node->GetData(), wxTopLevelWindow);
 
-        if (tlw && tlw != topWindow && tlw->IsAlwaysMaximized())
+        if (tlw && tlw != topWindow && tlw->IsAlwaysMaximized() && wxWasmWindowSlot(tlw) == 0)
             tlw->SetSize(0, 0, newSize.GetWidth(), newSize.GetHeight());
     }
 }
@@ -1266,9 +1269,12 @@ EM_BOOL KeyCallback(int eventType,
                           : eventType == EMSCRIPTEN_EVENT_KEYUP   ? "keyup"
                                                                   : "keypress";
     const std::string domCode = wxWasmKeyEventCode(*emscriptenEvent);
+    // KICLOUD: S4.8 (wx/wasm/pageframes.h): a key from a torn-off editor's window is re-dispatched
+    // here by wx.js, which names that window's document in window.__wxKeyDocument: the focus that
+    // decides is the focus there (a text field of a dialog in that window)
     if (!EM_ASM_INT({
             if (typeof document === 'undefined') return 1;
-            var ae = document.activeElement;
+            var ae = (window.__wxKeyDocument || document).activeElement;
             var editable = !!ae && (ae.tagName === 'INPUT' ||
                                     ae.tagName === 'TEXTAREA' ||
                                     ae.tagName === 'SELECT' ||

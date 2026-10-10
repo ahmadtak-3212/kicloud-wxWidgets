@@ -12,6 +12,7 @@
 #include "wx/nonownedwnd.h"
 #include "wx/wasm/private.h"
 #include "wx/wasm/private/display.h"
+#include "wx/wasm/pageframes.h"     // KICLOUD: S4.8 (wxWasmWindowSlot)
 
 #include <emscripten.h>
 
@@ -122,9 +123,12 @@ void wxNonOwnedWindow::DoSetSize(int x, int y,
 
     if (newRect != oldRect)
     {
+        // KICLOUD: S4.8 (docs/patches.md, wx/wasm/pageframes.h): with the slot (attached
+        // window) the window is drawn in; wx.js moves its element into that slot's document
         EM_ASM({
-            return setWindowRect($0, $1, $2, $3, $4);
-        }, GetCSSId(), newRect.x, newRect.y, newRect.width, newRect.height);
+            return setWindowRect($0, $1, $2, $3, $4, $5);
+        }, GetCSSId(), newRect.x, newRect.y, newRect.width, newRect.height,
+           wxWasmWindowSlot(this));
     }
 }
 

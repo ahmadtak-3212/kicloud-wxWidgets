@@ -27,6 +27,12 @@
 // JavaScript helper functions using scheduler token waits
 //-----------------------------------------------------------------------------
 
+// KICLOUD: S4.8 (docs/patches.md, wx/wasm/pageframes.h): the clipboard of the window that has the
+// focus. navigator.clipboard refuses a document without the focus ("Document is not focused"), and
+// with an editor torn off into an attached window the focus is in that window (wx.js
+// wxFocusedClipboard). Without wx.js's helper: this page's clipboard, as before. Used by every
+// clipboard read and write below.
+
 // Check if the browser Clipboard API is available
 EM_JS(bool, js_isClipboardAPIAvailable, (), {
     return typeof navigator !== 'undefined' &&
@@ -59,7 +65,7 @@ EM_JS(void, js_writeTextToClipboardStart, (int token, const char* text), {
     });
 
     Promise.race([
-        navigator.clipboard.writeText(textStr),
+        (typeof wxFocusedClipboard === 'function' ? wxFocusedClipboard() : navigator.clipboard).writeText(textStr),
         timeoutPromise
     ]).then(() => finish(0)).catch((err) => {
         if (err.name === 'NotAllowedError') {
@@ -94,7 +100,7 @@ EM_JS(void, js_readTextFromClipboardStart, (int token), {
     });
 
     Promise.race([
-        navigator.clipboard.readText(),
+        (typeof wxFocusedClipboard === 'function' ? wxFocusedClipboard() : navigator.clipboard).readText(),
         timeoutPromise
     ]).then((text) => {
         // Allocate memory for the string and copy it
@@ -139,7 +145,7 @@ EM_JS(void, js_clipboardHasTextStart, (int token), {
 
     // Try to read to check availability
     Promise.race([
-        navigator.clipboard.readText(),
+        (typeof wxFocusedClipboard === 'function' ? wxFocusedClipboard() : navigator.clipboard).readText(),
         timeoutPromise
     ]).then((text) => {
         finish((text && text.length > 0) ? 1 : 0);
@@ -167,7 +173,7 @@ EM_JS(void, js_clearClipboardStart, (int token), {
     });
 
     Promise.race([
-        navigator.clipboard.writeText(''),
+        (typeof wxFocusedClipboard === 'function' ? wxFocusedClipboard() : navigator.clipboard).writeText(''),
         timeoutPromise
     ]).then(() => finish(0)).catch((err) => {
         console.warn('[wxClipboard] Failed to clear clipboard: ' + err.message);
