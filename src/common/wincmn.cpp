@@ -3079,9 +3079,14 @@ bool wxWindowBase::PopupMenu(wxMenu *menu, int x, int y)
 */
     menu->SetInvokingWindow(static_cast<wxWindow *>(this));
 
+    // KICLOUD: F-P7 (LB9): the wasm port's DoPopupMenu() suspends until the menu is dismissed and the
+    // chosen command was sent, so the menu is no longer "current" when it returns: restore the previous
+    // value as the other ports do (a nested popup gives the outer one back). Before, the pointer was
+    // left set and dangled once the caller deleted the menu (see ~wxMenuBase, which also clears it).
+    wxMenu * const previousPopupMenu = wxCurrentPopupMenu;
     wxCurrentPopupMenu = menu;
     const bool rc = DoPopupMenu(menu, x, y);
-    //wxCurrentPopupMenu = NULL;
+    wxCurrentPopupMenu = previousPopupMenu;
 
     return rc;
 }

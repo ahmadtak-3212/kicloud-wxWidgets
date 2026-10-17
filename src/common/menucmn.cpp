@@ -388,8 +388,26 @@ void wxMenuBase::Init(long style)
     m_eventHandler = this;
 }
 
+// Destroy the menu's items. Called by delete or scope exit of a wxMenu (KiCad's context menus are often
+// stack objects that die right after PopupMenu() returns).
+// KICLOUD: F-P7 (LB9): also forget this menu if it is still recorded as the current popup menu. The
+// wasm port's wxWindowBase::PopupMenu() records the menu in wxCurrentPopupMenu, and
+// ~wxWindowBase() reads that pointer (menu->GetInvokingWindow(), then a virtual
+// SetInvokingWindow(NULL) call) for every window destroyed later. A menu deleted while still
+// recorded left a dangling pointer: once its freed memory held the address of a window being
+// destroyed at that offset, the virtual call went through the allocator's free-list word instead of
+// a vtable ("RuntimeError: function signature mismatch" in ~wxWindowBase, seen when
+// DIALOG_FOOTPRINT_PROPERTIES closed, which also left the half-destroyed dialog in the window list).
+// State change: wxCurrentPopupMenu becomes NULL when it pointed at this menu; nothing else.
 wxMenuBase::~wxMenuBase()
 {
+#ifdef __WXWASM__
+    extern wxMenu *wxCurrentPopupMenu;
+
+    if ( wxCurrentPopupMenu == this )
+        wxCurrentPopupMenu = NULL;
+#endif // __WXWASM__
+
     WX_CLEAR_LIST(wxMenuItemList, m_items);
 }
 
