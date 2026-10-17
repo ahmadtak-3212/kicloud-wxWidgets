@@ -23,6 +23,7 @@
 #include "wx/weakref.h"                // KICLOUD: P3-I
 #include "wx/progdlg.h"                // KICLOUD: PERF (docs/patches.md), D3
 #include "wx/toplevel.h"                // KICLOUD: PERF (docs/patches.md), D3
+#include "wx/button.h"                  // KICLOUD: F-P8
 
 #include <emscripten.h>
 #include <emscripten/html5.h>
@@ -89,6 +90,71 @@ wxString wxDomBitmapToDataURL(const wxBitmap& bitmap)
            wxBase64Encode(buf.GetData(), buf.GetDataLen());
 }
 
+// KICLOUD: F-P8 (LB10): the top-level window of the DOM control event that started the dispatch
+// chain now running or parked (for DIALOG_DRC's run: the DRC dialog, from its "Run DRC" button).
+// Set by wx_dom_event when it starts a chain while no other chain holds the interlock, and given
+// back when that chain completes (wxDomChainOrigin below); read by wxDomCancelOfParkedRun().
+static wxWeakRef<wxWindow> gs_chainOrigin;
+
+namespace
+{
+// KICLOUD: F-P8: records the chain's origin window for as long as the chain lives. Under JSPI the
+// destructor runs only when the chain has really completed (a suspension keeps the frame alive),
+// like wxWasmDispatchGuard's. Only a chain that starts while the depth is 0 records (nested
+// deliveries keep the outer chain's origin).
+class wxDomChainOrigin
+{
+public:
+    explicit wxDomChainOrigin(wxWindow *window)
+        : m_recorded(wxWasmDispatchDepth == 0),
+          m_previous(gs_chainOrigin)
+    {
+        if ( m_recorded )
+            gs_chainOrigin = window ? wxGetTopLevelParent(window) : NULL;
+    }
+
+    // Gives back the origin seen at construction (a chain started inside a modal dialog, where the
+    // depth reads 0, must not clear the origin of the chain that opened the dialog).
+    ~wxDomChainOrigin()
+    {
+        if ( m_recorded )
+            gs_chainOrigin = m_previous.get();
+    }
+
+private:
+    const bool m_recorded;
+    wxWeakRef<wxWindow> m_previous;
+
+    wxDECLARE_NO_COPY_CLASS(wxDomChainOrigin);
+};
+
+// KICLOUD: F-P8 (LB10): whether a DOM event on `window` is the Cancel button of a long operation that
+// its own dialog started and that is now parked in a main-thread wait for the thread pool. KiCad's
+// DRC runs inside the click handler of DIALOG_DRC's "Run DRC" button; its waits for the thread pool
+// suspend (wasm/shims/main_thread_wait.c) and hold the dispatch interlock, so a click on the
+// dialog's Cancel was deferred until the run had ended (41 s on the largest demo board) and
+// cancelled nothing. On the desktop that click is read by the dialog's own progress updates
+// (wxSafeYield) while the run goes on. Called by wx_dom_event only while a chain is parked.
+// True only when all hold: the window is a wxButton with id wxID_CANCEL; its top-level window is
+// the one whose control started the parked chain (gs_chainOrigin); and the scheduler counts a
+// parked main-thread wait (S.mainWaitParked: the chain waits for worker threads, not for a fetch
+// or a nested dialog). The handler then runs inside that state: KiCad's DIALOG_DRC::OnCancelClick
+// only sets the cancel flag while a run is going, which the run checks between its steps.
+bool wxDomCancelOfParkedRun(wxWindowWasm *window)
+{
+    if ( !gs_chainOrigin || window->GetId() != wxID_CANCEL || !wxDynamicCast(window, wxButton) )
+        return false;
+
+    if ( wxGetTopLevelParent(window) != gs_chainOrigin.get() )
+        return false;
+
+    return EM_ASM_INT({
+        var S = globalThis.__wxScheduler;
+        return S && S.mainWaitParked > 0 ? 1 : 0;
+    }) != 0;
+}
+} // namespace
+
 // KICLOUD: P3-I: a DOM event deferred behind queued input (see wx_dom_event)
 namespace
 {
@@ -124,6 +190,7 @@ void wxDomDeliverDeferred(void *arg)
     if ( !window->IsEnabled() )
         return;
 
+    wxDomChainOrigin chainOrigin(window);   // KICLOUD: F-P8
     wxWasmDispatchGuard dispatchGuard;
     gs_currentEventDomId = domId;
     window->OnDomEvent(static_cast<wxDomEventKind>(kind));
@@ -137,6 +204,7 @@ void wxDomQueueDomEvent(wxWindowWasm *window, int domId, int kind)
                               new wxDomDeferredEvent{ wxWeakRef<wxWindow>(static_cast<wxWindow *>(window)), domId, kind },
                               0);
 }
+
 
 extern "C"
 {
@@ -177,6 +245,17 @@ void EMSCRIPTEN_KEEPALIVE wx_dom_event(int domId, int kind)
     }
 #endif
 
+    // KICLOUD: F-P8 (LB10): the Cancel of a dialog whose own run is parked waiting for the thread
+    // pool is delivered at once, like a progress dialog's (see wxDomCancelOfParkedRun).
+    if ( wxWasmDispatchParked() && wxDomCancelOfParkedRun(window) )
+    {
+        wxWasmDispatchGuard cancelGuard;
+        gs_currentEventDomId = domId;
+        window->OnDomEvent(static_cast<wxDomEventKind>(kind));
+        gs_currentEventDomId = 0;
+        return;
+    }
+
     if ( wxWasmDispatchParked() || wxWasmQueuedInput > 0 )
     {
         // Another dispatch chain is suspended mid-handler; defer this DOM
@@ -191,6 +270,7 @@ void EMSCRIPTEN_KEEPALIVE wx_dom_event(int domId, int kind)
         return;
     }
 
+    wxDomChainOrigin chainOrigin(window);   // KICLOUD: F-P8: before the guard raises the depth
     wxWasmDispatchGuard dispatchGuard;
 
     gs_currentEventDomId = domId;
