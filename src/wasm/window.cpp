@@ -25,6 +25,7 @@
 #include "wx/settings.h"
 #include "wx/wasm/private/dispatch.h"
 #include "wx/wasm/private/dom.h"
+#include "wx/wasm/elementtracker.h"   // KICLOUD: F7 round 3 (WasmUnregisterRenderedElementsByParent)
 
 #include <emscripten.h>
 #include <map>
@@ -353,6 +354,14 @@ wxWindowWasm::~wxWindowWasm()
 
     // Unregister from JS tracking system before destruction
     UnregisterElement(this);
+
+    // KICLOUD: F7 round 3. Also drop the per-item entries this window published into the JS registry
+    // (toolbar tools, menu items, AUI parts, grid cells, list rows: WasmRegisterRenderedElement keys them by
+    // this window's address). Nothing removed them, so the registry's Map grew with every window that was
+    // created and destroyed (a dialog, a popup, a rebuilt toolbar), and wx-dom.js walks the whole Map each
+    // time a text field or spin control moves (scheduleControlRegistry): in the routing soak that walk grew
+    // from ~2 ms to ~110 ms per cycle within 45 minutes and made finishing a route slower and slower.
+    WasmUnregisterRenderedElementsByParent(static_cast<wxWindow*>(this));
 
     SendDestroyEvent();
 
