@@ -12,6 +12,7 @@
 #include "wx/evtloop.h"
 #include "wx/init.h"
 #include "wx/toplevel.h"
+#include "wx/nonownedwnd.h"   // KICLOUD: R-F2a: HandlePaintRequests for the input tick's windows
 #include "wx/wasm/private/dispatch.h"
 #include "wx/wasm/private/mailbox.h"
 #include "wx/wasm/private/yieldwait.h"
@@ -758,7 +759,10 @@ EM_JS(unsigned, wxWasmSuspendSeqJs, (), {
 //     the loop's first tick after it resumes delivers what queued, as before);
 //   * at most once per animation frame (claimed in JS, released by the next frame), so input
 //     faster than the display still costs at most one extra pass per frame; a second input in
-//     the same frame is left to the loop's tick after the frame, as before;
+//     the same frame is left to the loop's tick after the frame, as before; the claim is taken
+//     only after input jobs and only when they left events to process or a window to repaint
+//     (a timer job or an input that changed nothing never uses up the frame);
+//   * it repaints only the top-level windows the input reached; others wait for the loop's tick;
 //   * only on the job tick, a promising activation in its own task, never nested inside another
 //     dispatch: a handler that suspends parks the job tick's activation exactly as it would park
 //     the loop's tick (its guard holds the interlock meanwhile);
@@ -770,6 +774,56 @@ EM_JS(unsigned, wxWasmSuspendSeqJs, (), {
 static unsigned s_inputTicks = 0;          // input ticks that ran
 static unsigned s_inputTicksParked = 0;    // skipped: a dispatch chain was parked
 static unsigned s_inputTicksFrame = 0;     // skipped: one already ran in this animation frame
+static unsigned s_inputTicksIdle = 0;      // KICLOUD: R-F2a fix 1: skipped: nothing to process or repaint
+
+// KICLOUD: R-F2a fix 1 and 2 (review of 2f14a17f29): what the input jobs since the last input
+// tick left for it. The job tick also delivers timer messages (a mailbox tick on a plain entry),
+// and a timer job early in a frame took the frame's claim with nothing to do, so a pointer move
+// later in the same frame waited for the loop's tick again. Only a job that came from input
+// (wxWasmNoteInputJob, called by the key, mouse, wheel and touch jobs in app.cpp) arms the input
+// tick, and the input tick repaints only the top-level windows those inputs reached (the canvas
+// under the pointer, the window with the keyboard focus): another window that was invalidated
+// meanwhile, such as the 3D viewer's (whose raytracer can suspend while its Worker boots), is
+// left to the loop's tick. The window pointers are only compared with wxTopLevelWindows, never
+// dereferenced on their own, so a window destroyed meanwhile is simply not found.
+static bool s_inputJobRan = false;
+static std::vector<wxWindow *> s_inputTargets;
+
+// Called by an input job (app.cpp: wxWasmRunMouseJob, wxWasmRunKeyJob) once its handlers ran.
+// target: the window the input reached (the window under the pointer, the focused window), or
+// NULL. State changed: s_inputJobRan and s_inputTargets (its top-level window, once).
+void wxWasmNoteInputJob(wxWindow *target)
+{
+    s_inputJobRan = true;
+    wxWindow *top = target ? wxGetTopLevelParent(target) : NULL;
+    if (top)
+    {
+        for (size_t i = 0; i < s_inputTargets.size(); ++i)
+            if (s_inputTargets[i] == top)
+                return;
+        s_inputTargets.push_back(top);
+    }
+}
+
+// The live top-level windows among the noted targets that wait for a repaint and can paint
+// (shown, not frozen, not empty), in wxTopLevelWindows order. Reads state only.
+static std::vector<wxNonOwnedWindow *> wxWasmInputTargetsToPaint(const std::vector<wxWindow *> &targets)
+{
+    std::vector<wxNonOwnedWindow *> out;
+    for (wxWindowList::iterator it = wxTopLevelWindows.begin(); it != wxTopLevelWindows.end(); ++it)
+    {
+        wxWindow *w = *it;
+        bool target = false;
+        for (size_t i = 0; i < targets.size() && !target; ++i)
+            target = targets[i] == w;
+        if (!target || !w->IsShown() || w->IsFrozen() || !w->NeedsPaint())
+            continue;
+        const wxSize sz = w->GetClientSize();
+        if (sz.GetWidth() > 0 && sz.GetHeight() > 0)
+            out.push_back(static_cast<wxNonOwnedWindow *>(w));
+    }
+    return out;
+}
 
 // 0 when the page (or its same-origin parent, the shell around the editor frame) has
 // ?wxinput=frame in its URL, else 1. Read once (wxWasmInputTick caches it).
@@ -797,23 +851,38 @@ EM_JS(int, wxWasmInputTickClaimJs, (), {
 });
 
 // The input tick (see the block comment above). Called by wxWasmJobTick once its queue is empty
-// (also after a job that suspended and resumed), on the job tick's promising activation; the job
-// tick also delivers timer messages that arrived on a plain entry (wxWasmMailboxTick), so a timer
-// handler's posted work is handled the same way. Runs wx's pending events and the
-// repaint of invalidated windows under a dispatch guard, or does nothing (disabled, no app,
-// a chain parked, or this frame's tick already ran). May suspend (a posted handler that opens a
-// modal), which parks the job tick's activation with the guard held, like any dispatch.
+// (also after a job that suspended and resumed), on the job tick's promising activation. Acts
+// only when input jobs ran since the last call (timer messages the job tick delivers do not
+// count). Runs wx's pending events and then repaints the inputs' top-level windows under a
+// dispatch guard, or does nothing (disabled, no app, a chain parked, nothing to process or
+// repaint, or this frame's tick already ran). May suspend (a posted handler that opens a modal),
+// which parks the job tick's activation with the guard held, like any dispatch.
 static void wxWasmInputTick()
 {
     static int s_enabled = -1;
     if (s_enabled < 0)
         s_enabled = wxWasmInputTickEnabledJs();
+
+    // KICLOUD: R-F2a fix 1: only after input jobs; take what they noted (consumed whatever this
+    // tick decides: what it leaves goes to the loop's tick, as before the input tick existed)
+    if (!s_inputJobRan)
+        return;
+    s_inputJobRan = false;
+    std::vector<wxWindow *> targets;
+    targets.swap(s_inputTargets);
+
     if (!s_enabled || !wxTheApp || !wxTheApp->GetTopWindow())
         return;
 
     if (wxWasmDispatchParked())
     {
         ++s_inputTicksParked;
+        return;
+    }
+    // KICLOUD: R-F2a fix 1: the frame's claim only when there is something to do
+    if (!wxTheApp->HasPendingEvents() && wxWasmInputTargetsToPaint(targets).empty())
+    {
+        ++s_inputTicksIdle;
         return;
     }
     if (!wxWasmInputTickClaimJs())
@@ -825,13 +894,14 @@ static void wxWasmInputTick()
     ++s_inputTicks;
     wxWasmDispatchGuard guard;
     wxTheApp->ProcessPendingEvents();
-    // The full repaint, as the loop's tick does, not HandleMouseEvent's button-path
-    // Paint(true), which skips non-main windows hosting a wxGLCanvas: that deferral is for a
-    // repaint from a plain DOM callback, where the 3D viewer's raytracer could not let a new
-    // pthread Worker boot. The input tick runs, like the loop's tick, on a promising activation
-    // in its own task, where the raytracer's waits suspend and the browser boots the Worker; and
-    // the PCB and schematic canvases need not be in the main (first) frame.
-    wxTheApp->Paint();
+    // KICLOUD: R-F2a fix 2: repaint the input's top-level windows only (looked up again: the
+    // events just processed may have invalidated, shown, hidden or destroyed windows), as
+    // wxApp::Paint does for every window; the loop's tick repaints the rest. This also keeps the
+    // input tick away from the 3D viewer's window unless the input went there, where (as on the
+    // loop's tick) a raytracer wait suspends this promising activation while its Worker boots.
+    const std::vector<wxNonOwnedWindow *> paint = wxWasmInputTargetsToPaint(targets);
+    for (size_t i = 0; i < paint.size(); ++i)
+        paint[i]->HandlePaintRequests();
 }
 
 extern "C" {
@@ -839,7 +909,8 @@ extern "C" {
     // KICLOUD: R-F2a: plain export for diagnostics and tests (reads counters, runs no wx code, so
     // it is callable from any JS context, also while a chain is parked). which: 0 input ticks run,
     // 1 skipped because a dispatch chain was parked, 2 skipped because one already ran in that
-    // animation frame, 3 the dispatch interlock's depth right now (wxWasmDispatchDepth).
+    // animation frame, 3 the dispatch interlock's depth right now (wxWasmDispatchDepth), 4 skipped
+    // because the input left nothing to process or repaint (R-F2a fix 1).
     unsigned EMSCRIPTEN_KEEPALIVE wxWasmInputTickStats(int which)
     {
         switch (which)
@@ -848,6 +919,7 @@ extern "C" {
             case 1: return s_inputTicksParked;
             case 2: return s_inputTicksFrame;
             case 3: return (unsigned)wxWasmDispatchDepth;
+            case 4: return s_inputTicksIdle;   // KICLOUD: R-F2a fix 1
         }
         return 0;
     }

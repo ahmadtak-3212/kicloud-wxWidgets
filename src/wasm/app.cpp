@@ -50,6 +50,11 @@ void RegisterEmscriptenCallbacks(wxApp* app);
 // KICLOUD: PERF (docs/patches.md), D2: the event-driven loop's wake (evtloop.cpp).
 extern "C" void wxWasmRequestTick(int idle);
 
+// KICLOUD: R-F2a (docs/patches.md): an input job tells the input tick (evtloop.cpp) that it ran
+// and which window it reached, so the tick runs after input only and repaints that window's
+// top-level window (see wxWasmNoteInputJob there).
+void wxWasmNoteInputJob(wxWindow *target);
+
 // WASM-specific logger that outputs to browser console
 extern wxLog* wxCreateLogWasm();
 
@@ -965,6 +970,8 @@ void wxWasmRunMouseJob(void *arg)
         job->app->HandleMouseEvent(&job->event);
     }
 
+    // KICLOUD: R-F2a: the window under the pointer now (HandleMouseEvent keeps g_mouseWindow)
+    wxWasmNoteInputJob(g_mouseWindow);
     wxWasmFinishDomJob(job);
 }
 
@@ -1219,6 +1226,9 @@ void wxWasmRunKeyJob(void *arg)
         app->HandleKeyEvent(&event);
     }
 
+    // KICLOUD: R-F2a: the window with the keyboard focus now (where the key went, or where a key
+    // that moved the focus left it)
+    wxWasmNoteInputJob(wxWindow::FindFocus());
     wxWasmFinishDomJob(job);
 }
 
