@@ -637,6 +637,15 @@ EM_JS(void, wxWasmScheduleProcessEvents, (), {
     }, 0);
 });
 
+// KICLOUD: R-F2a (docs/patches.md; the input tick, see the block above wxWasmJobTick). Release
+// the input tick's once-per-frame claim while the page is hidden (no animation frame would
+// release it). Called by the loop's own tick (wxWasmTopLevelTick); a no-op on a visible page.
+EM_JS(void, wxWasmInputTickReleaseIfHiddenJs, (), {
+    var S = globalThis.__wxScheduler;
+    if (S && S.__wxInputTickFrame && typeof document !== "undefined" && document.visibilityState === "hidden")
+        S.__wxInputTickFrame = false;
+});
+
 extern "C" {
 
     // The top-level loop's scheduled dispatch. A separate entry point from
@@ -653,6 +662,11 @@ extern "C" {
     // suspended nested DoRun.
     void EMSCRIPTEN_KEEPALIVE wxWasmTopLevelTick()
     {
+        // KICLOUD: R-F2a (docs/patches.md): a hidden page draws no animation frames, so the
+        // input tick's once-per-frame claim (wxWasmInputTickClaimJs) would never be released;
+        // the loop's own tick releases it there instead.
+        wxWasmInputTickReleaseIfHiddenJs();
+
         // KICLOUD: PERF (docs/patches.md), D2: a tick started by the loop's heartbeat (no wake for
         // HEARTBEAT_MS) only looks for work. Finding some means a wake was missed somewhere: it
         // is processed now and counted (wxWasmMissedWakeCount) and logged, so the source can be
@@ -726,6 +740,112 @@ EM_JS(unsigned, wxWasmSuspendSeqJs, (), {
     return globalThis.__wxScheduler._suspendSeq >>> 0;
 });
 
+// ----------------------------------------------------------------------------
+// KICLOUD: R-F2a (FEATURE_ROUTING_TOOLS.md 3.3, docs/patches.md): the input tick
+// ----------------------------------------------------------------------------
+// Input reaches wx as jobs on the job tick (below; KeyCallback, MouseCallback, WheelCallback and
+// TouchCallback in app.cpp queue them), a fresh task right after the DOM event. What
+// a job's handlers leave for later (an event posted with wxPostEvent or CallAfter: the motion
+// queued for a tool, a status-bar update, KiCad's own posted tool events) and the repaint of an
+// invalidated window used to wait for the top-level loop's next tick, which runs only after the
+// next animation frame begins (loopWait, then wxWasmScheduleProcessEvents' setTimeout). An input
+// that lands just after that tick waited almost a whole frame before KiCad reacted (a router
+// drag step: input at the start of a frame, tool and draw only after the next one, on screen a
+// frame later still). The input tick runs that pass (pending events and repaint; idle stays with
+// the loop's tick) at once, at the end of the job tick that delivered the input, so what the
+// input changed is drawn before the next frame. Rules that keep the port's invariants:
+//   * never while a dispatch chain is parked (the interlock: the parked chain's own wxYield or
+//     the loop's first tick after it resumes delivers what queued, as before);
+//   * at most once per animation frame (claimed in JS, released by the next frame), so input
+//     faster than the display still costs at most one extra pass per frame; a second input in
+//     the same frame is left to the loop's tick after the frame, as before;
+//   * only on the job tick, a promising activation in its own task, never nested inside another
+//     dispatch: a handler that suspends parks the job tick's activation exactly as it would park
+//     the loop's tick (its guard holds the interlock meanwhile);
+//   * page URL ?wxinput=frame (on the editor page or its same-origin parent) turns it off: the
+//     loop's tick alone, as before (an A/B switch and a fallback).
+// The loop's tick still runs for the same input (the input asked for it, HandleMouseEvent and
+// HandleKeyEvent): it sends the idle events (UpdateUI) and finds nothing else left to do.
+// State: the counters below and the scheduler's __wxInputTickFrame flag. Main thread only.
+static unsigned s_inputTicks = 0;          // input ticks that ran
+static unsigned s_inputTicksParked = 0;    // skipped: a dispatch chain was parked
+static unsigned s_inputTicksFrame = 0;     // skipped: one already ran in this animation frame
+
+// 0 when the page (or its same-origin parent, the shell around the editor frame) has
+// ?wxinput=frame in its URL, else 1. Read once (wxWasmInputTick caches it).
+EM_JS(int, wxWasmInputTickEnabledJs, (), {
+    var re = /[?&]wxinput=frame\b/;
+    try { if (re.test(String(globalThis.location && globalThis.location.search))) return 0; } catch (e) {}
+    try { if (globalThis.parent && globalThis.parent !== globalThis && re.test(String(globalThis.parent.location.search))) return 0; } catch (e) {}
+    return 1;
+});
+
+// Claim this animation frame's input tick: 1 when none ran since the last frame began (the
+// claim is then held until the next animation frame of this page), 0 when one already ran.
+// Called only from wxWasmInputTick. Changes __wxScheduler.__wxInputTickFrame.
+EM_JS(int, wxWasmInputTickClaimJs, (), {
+    var S = globalThis.__wxScheduler;
+    if (!S || S.dead) return 0;
+    if (S.__wxInputTickFrame) return 0;
+    S.__wxInputTickFrame = true;
+    var release = function () { S.__wxInputTickFrame = false; };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(release);
+    else setTimeout(release, 16);
+    return 1;
+});
+
+// The input tick (see the block comment above). Called by wxWasmJobTick once its queue is empty
+// (also after a job that suspended and resumed), on the job tick's promising activation; the job
+// tick also delivers timer messages that arrived on a plain entry (wxWasmMailboxTick), so a timer
+// handler's posted work is handled the same way. Runs wx's pending events and the
+// repaint of invalidated windows under a dispatch guard, or does nothing (disabled, no app,
+// a chain parked, or this frame's tick already ran). May suspend (a posted handler that opens a
+// modal), which parks the job tick's activation with the guard held, like any dispatch.
+static void wxWasmInputTick()
+{
+    static int s_enabled = -1;
+    if (s_enabled < 0)
+        s_enabled = wxWasmInputTickEnabledJs();
+    if (!s_enabled || !wxTheApp || !wxTheApp->GetTopWindow())
+        return;
+
+    if (wxWasmDispatchParked())
+    {
+        ++s_inputTicksParked;
+        return;
+    }
+    if (!wxWasmInputTickClaimJs())
+    {
+        ++s_inputTicksFrame;
+        return;
+    }
+
+    ++s_inputTicks;
+    wxWasmDispatchGuard guard;
+    wxTheApp->ProcessPendingEvents();
+    wxTheApp->Paint();
+}
+
+extern "C" {
+
+    // KICLOUD: R-F2a: plain export for diagnostics and tests (reads counters, runs no wx code, so
+    // it is callable from any JS context, also while a chain is parked). which: 0 input ticks run,
+    // 1 skipped because a dispatch chain was parked, 2 skipped because one already ran in that
+    // animation frame, 3 the dispatch interlock's depth right now (wxWasmDispatchDepth).
+    unsigned EMSCRIPTEN_KEEPALIVE wxWasmInputTickStats(int which)
+    {
+        switch (which)
+        {
+            case 0: return s_inputTicks;
+            case 1: return s_inputTicksParked;
+            case 2: return s_inputTicksFrame;
+            case 3: return (unsigned)wxWasmDispatchDepth;
+        }
+        return 0;
+    }
+
+}  // extern "C"
+
 extern "C" void EMSCRIPTEN_KEEPALIVE wxWasmJobTick()
 {
     // A job that suspends (a click opening a modal) parks THIS activation; the
@@ -747,8 +867,23 @@ extern "C" void EMSCRIPTEN_KEEPALIVE wxWasmJobTick()
         const unsigned suspendsBefore = wxWasmSuspendSeqJs();
         job.fn(job.arg);
         if (wxWasmSuspendSeqJs() != suspendsBefore)
-            return;   // this activation suspended (and resumed): the armed tick owns the queue now
+        {
+            // this activation suspended (and resumed): the armed tick owns the queue now
+            // KICLOUD: R-F2a: ... when there is one. With nothing queued (a mouse job that resumed
+            // a KiCad tool coroutine suspends briefly, and so does a click that opened a modal,
+            // until it closes) the input tick below still runs for what the job left behind.
+            if (!wxWasmJspiJobs().empty())
+                return;
+            break;
+        }
     }
+
+    // KICLOUD: R-F2a (docs/patches.md): the queue is empty: run the input tick (see the block
+    // above) for what these jobs posted or invalidated, instead of leaving it for the loop's tick
+    // after the next animation frame. With jobs still queued (the batch bound) the armed tick
+    // runs them first and then its own input tick.
+    if (wxWasmJspiJobs().empty())
+        wxWasmInputTick();
 }
 
 extern "C" void wxWasmRunOnDispatchContext(void (*fn)(void *), void *arg)
