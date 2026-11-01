@@ -771,7 +771,9 @@ EM_JS(unsigned, wxWasmSuspendSeqJs, (), {
 //   * page URL ?wxinput=frame (on the editor page or its same-origin parent) turns it off: the
 //     loop's tick alone, as before (an A/B switch and a fallback).
 // The loop's tick still runs for the same input (the input asked for it, HandleMouseEvent and
-// HandleKeyEvent): it sends the idle events (UpdateUI) and finds nothing else left to do.
+// HandleKeyEvent): it sends the idle events (UpdateUI) and repaints what the input tick left
+// alone: windows the input did not reach, and everything after a long job, a skipped frame or
+// a parked chain.
 // State: the counters below and the scheduler's __wxInputTickFrame flag. Main thread only.
 static unsigned s_inputTicks = 0;          // input ticks that ran
 static unsigned s_inputTicksParked = 0;    // skipped: a dispatch chain was parked
@@ -795,8 +797,11 @@ static const double wxWASM_INPUT_TICK_MAX_JOB_MS = 8.0;
 // tick, and the input tick repaints only the top-level windows those inputs reached (the canvas
 // under the pointer, the window with the keyboard focus): another window that was invalidated
 // meanwhile, such as the 3D viewer's (whose raytracer can suspend while its Worker boots), is
-// left to the loop's tick. The window pointers are only compared with wxTopLevelWindows, never
-// dereferenced on their own, so a window destroyed meanwhile is simply not found.
+// left to the loop's tick. The target is dereferenced only at the moment it is noted
+// (wxGetTopLevelParent, while the input job still runs; safe because ~wxWindow clears
+// g_mouseWindow and gs_focusWindow, so the job never hands over a freed window). The stored
+// pointers are afterwards only compared with wxTopLevelWindows, never dereferenced on their
+// own, so a window destroyed meanwhile is simply not found.
 static bool s_inputJobRan = false;
 static std::vector<wxWindow *> s_inputTargets;
 
@@ -817,7 +822,11 @@ void wxWasmNoteInputJob(wxWindow *target)
 }
 
 // The live top-level windows among the noted targets that wait for a repaint and can paint
-// (shown, not frozen, not empty), in wxTopLevelWindows order. Reads state only.
+// (shown, not frozen, not empty), in wxTopLevelWindows order. Called by wxWasmInputTick twice:
+// for the idle check before the frame claim, and for the repaint list after ProcessPendingEvents
+// (and once more per window inside its paint loop, to confirm the window is still alive).
+// targets: the top-level windows noted by wxWasmNoteInputJob, possibly stale (compared only,
+// never dereferenced). Reads state only.
 static std::vector<wxNonOwnedWindow *> wxWasmInputTargetsToPaint(const std::vector<wxWindow *> &targets)
 {
     std::vector<wxNonOwnedWindow *> out;
@@ -849,6 +858,8 @@ EM_JS(int, wxWasmInputTickEnabledJs, (), {
 
 // Claim this animation frame's input tick: 1 when none ran since the last frame began (the
 // claim is then held until the next animation frame of this page), 0 when one already ran.
+// Only input ticks that have work ask for it (fix 1); a timer-posted event that happens to be
+// pending at an input tick is processed under that claim too, which is acceptable.
 // Called only from wxWasmInputTick. Changes __wxScheduler.__wxInputTickFrame.
 EM_JS(int, wxWasmInputTickClaimJs, (), {
     var S = globalThis.__wxScheduler;
@@ -919,7 +930,15 @@ static void wxWasmInputTick(double jobMs)
     // loop's tick) a raytracer wait suspends this promising activation while its Worker boots.
     const std::vector<wxNonOwnedWindow *> paint = wxWasmInputTargetsToPaint(targets);
     for (size_t i = 0; i < paint.size(); ++i)
+    {
+        // KICLOUD: R-F2a (review): the list was built once; an earlier window's paint may have
+        // suspended (the 3D viewer's raytracer wait) or destroyed a later one. Paint a window
+        // only while it is still in wxTopLevelWindows (pointer comparison only, no dereference
+        // of a possibly freed entry).
+        if (wxTopLevelWindows.Find(paint[i]) == NULL)
+            continue;
         paint[i]->HandlePaintRequests();
+    }
 }
 
 extern "C" {
