@@ -823,6 +823,12 @@ static void wxWasmInputTick()
     ++s_inputTicks;
     wxWasmDispatchGuard guard;
     wxTheApp->ProcessPendingEvents();
+    // The full repaint, as the loop's tick does, not HandleMouseEvent's button-path
+    // Paint(true), which skips non-main windows hosting a wxGLCanvas: that deferral is for a
+    // repaint from a plain DOM callback, where the 3D viewer's raytracer could not let a new
+    // pthread Worker boot. The input tick runs, like the loop's tick, on a promising activation
+    // in its own task, where the raytracer's waits suspend and the browser boots the Worker; and
+    // the PCB and schematic canvases need not be in the main (first) frame.
     wxTheApp->Paint();
 }
 
