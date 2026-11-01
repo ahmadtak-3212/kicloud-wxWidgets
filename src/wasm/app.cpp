@@ -1243,6 +1243,44 @@ bool KeyEventIsPlainPrintable(const EmscriptenKeyboardEvent &ev)
     return key[i] == '\0' && (static_cast<unsigned char>(key[0]) >= 0x20);
 }
 
+// KICLOUD: R0.1 (docs/patches.md): the key code of a 'keydown' or 'keyup' is the character the key
+// types (KeyboardEvent.key), as wxGTK reports it (the shifted symbol for punctuation, letters
+// uppercased), not the US-layout key position (KeyboardEvent.code) that keyboard.cpp's table maps.
+// The table has no "Slash" entry, so Ctrl+/ reached KiCad as WXK_NONE, and it gives ',' for
+// Ctrl+Shift+Comma where KiCad's router-settings hotkey is Ctrl+'<' (ACTION_MANAGER::RunHotKey
+// retries without Shift, not with another character). Called by KeyCallback right after
+// EmscriptenKeyboardEventToWXEvent. Inputs: the browser event type and event; `event` is the wx
+// event built from them, whose m_keyCode (and m_uniChar) this replaces when `key` is one printable
+// ASCII character other than space. Everything else keeps the table's code: Numpad keys
+// (WXK_NUMPAD*), named keys (Enter, End, F1, ...), space, and characters outside ASCII (another
+// layout's letter, or a Mac Option symbol), whose key position is the useful code for a hotkey
+// (Ctrl+Z on a Cyrillic layout is still 'Z'). 'keypress' (wxEVT_CHAR) already uses `key`. The
+// pending-key pairing (wxWasmPendingKey) stays keyed by `code`. As on wxGTK, a key released after
+// its Shift reports another code on 'keyup' than on 'keydown' (wxApp's pressed-key set keeps the
+// first; KiCad asks it only for modifiers).
+static void wxWasmKeyCodeFromCharacter(int eventType,
+                                       const EmscriptenKeyboardEvent &ev,
+                                       wxKeyEvent &event)
+{
+    if (eventType != EMSCRIPTEN_EVENT_KEYDOWN && eventType != EMSCRIPTEN_EVENT_KEYUP)
+        return;
+
+    if (strncmp(ev.code, "Numpad", 6) == 0)
+        return;
+
+    const unsigned char c = static_cast<unsigned char>(ev.key[0]);
+
+    if (c <= 0x20 || c >= 0x7F || ev.key[1] != '\0')
+        return;
+
+    const int code = (c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c;
+
+    event.m_keyCode = code;
+#if wxUSE_UNICODE
+    event.m_uniChar = code;
+#endif
+}
+
 EM_BOOL KeyCallback(int eventType,
                     const EmscriptenKeyboardEvent *emscriptenEvent,
                     void *userData)
@@ -1294,6 +1332,8 @@ EM_BOOL KeyCallback(int eventType,
 
     if (EmscriptenKeyboardEventToWXEvent(eventType, *emscriptenEvent, &event))
     {
+        wxWasmKeyCodeFromCharacter(eventType, *emscriptenEvent, event);   // KICLOUD: R0.1
+
         /*
                 wxString key_char(event.GetUnicodeKey());
                 printf("type: %d, key_code: %d, char: %s\n",
