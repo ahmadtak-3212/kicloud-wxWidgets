@@ -773,8 +773,10 @@ static unsigned s_inputTicksFrame = 0;     // skipped: one already ran in this a
 
 // 0 when the page (or its same-origin parent, the shell around the editor frame) has
 // ?wxinput=frame in its URL, else 1. Read once (wxWasmInputTick caches it).
+// KICLOUD: R-F2a: no backslash in the pattern: EM_JS stringifies its body into a C string
+// literal, where a regex's \b became a backspace character and the switch never matched.
 EM_JS(int, wxWasmInputTickEnabledJs, (), {
-    var re = /[?&]wxinput=frame\b/;
+    var re = /[?&]wxinput=frame(?:&|#|$)/;
     try { if (re.test(String(globalThis.location && globalThis.location.search))) return 0; } catch (e) {}
     try { if (globalThis.parent && globalThis.parent !== globalThis && re.test(String(globalThis.parent.location.search))) return 0; } catch (e) {}
     return 1;
