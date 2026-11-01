@@ -763,6 +763,8 @@ EM_JS(unsigned, wxWasmSuspendSeqJs, (), {
 //     only after input jobs and only when they left events to process or a window to repaint
 //     (a timer job or an input that changed nothing never uses up the frame);
 //   * it repaints only the top-level windows the input reached; others wait for the loop's tick;
+//   * not after jobs that already ran 8 ms or more (wxWASM_INPUT_TICK_MAX_JOB_MS): the browser
+//     then draws a frame before the rest runs, as with the loop's tick;
 //   * only on the job tick, a promising activation in its own task, never nested inside another
 //     dispatch: a handler that suspends parks the job tick's activation exactly as it would park
 //     the loop's tick (its guard holds the interlock meanwhile);
@@ -775,6 +777,15 @@ static unsigned s_inputTicks = 0;          // input ticks that ran
 static unsigned s_inputTicksParked = 0;    // skipped: a dispatch chain was parked
 static unsigned s_inputTicksFrame = 0;     // skipped: one already ran in this animation frame
 static unsigned s_inputTicksIdle = 0;      // KICLOUD: R-F2a fix 1: skipped: nothing to process or repaint
+static unsigned s_inputTicksLong = 0;      // KICLOUD: R-F2a: skipped: the job tick had already run long
+
+// KICLOUD: R-F2a (jetson, routing after a via): when the jobs themselves took this long, the input
+// tick steps aside. A router step on the largest board can take ~45 ms inside the job; the input
+// tick's repaint (~30 ms) in the same task made one ~90 ms task with no frame in between, so the
+// step reached the screen later than with the loop's tick, which runs after the browser has drawn
+// a frame (post-via route steps p95 102 against 60 ms with the input tick off). After a job this
+// long the next frame is missed either way; the loop's tick after it does the rest.
+static const double wxWASM_INPUT_TICK_MAX_JOB_MS = 8.0;
 
 // KICLOUD: R-F2a fix 1 and 2 (review of 2f14a17f29): what the input jobs since the last input
 // tick left for it. The job tick also delivers timer messages (a mailbox tick on a plain entry),
@@ -853,11 +864,12 @@ EM_JS(int, wxWasmInputTickClaimJs, (), {
 // The input tick (see the block comment above). Called by wxWasmJobTick once its queue is empty
 // (also after a job that suspended and resumed), on the job tick's promising activation. Acts
 // only when input jobs ran since the last call (timer messages the job tick delivers do not
-// count). Runs wx's pending events and then repaints the inputs' top-level windows under a
-// dispatch guard, or does nothing (disabled, no app, a chain parked, nothing to process or
-// repaint, or this frame's tick already ran). May suspend (a posted handler that opens a modal),
+// count). jobMs: how long the job tick has run so far. Runs wx's pending events and then repaints
+// the inputs' top-level windows under a dispatch guard, or does nothing (disabled, no app, a
+// chain parked, the jobs ran long, nothing to process or repaint, or this frame's tick already
+// ran). May suspend (a posted handler that opens a modal),
 // which parks the job tick's activation with the guard held, like any dispatch.
-static void wxWasmInputTick()
+static void wxWasmInputTick(double jobMs)
 {
     static int s_enabled = -1;
     if (s_enabled < 0)
@@ -877,6 +889,12 @@ static void wxWasmInputTick()
     if (wxWasmDispatchParked())
     {
         ++s_inputTicksParked;
+        return;
+    }
+    // KICLOUD: R-F2a: not after jobs that already ran long (wxWASM_INPUT_TICK_MAX_JOB_MS)
+    if (jobMs >= wxWASM_INPUT_TICK_MAX_JOB_MS)
+    {
+        ++s_inputTicksLong;
         return;
     }
     // KICLOUD: R-F2a fix 1: the frame's claim only when there is something to do
@@ -910,7 +928,8 @@ extern "C" {
     // it is callable from any JS context, also while a chain is parked). which: 0 input ticks run,
     // 1 skipped because a dispatch chain was parked, 2 skipped because one already ran in that
     // animation frame, 3 the dispatch interlock's depth right now (wxWasmDispatchDepth), 4 skipped
-    // because the input left nothing to process or repaint (R-F2a fix 1).
+    // because the input left nothing to process or repaint (R-F2a fix 1), 5 skipped because the job
+    // tick had already run wxWASM_INPUT_TICK_MAX_JOB_MS or more.
     unsigned EMSCRIPTEN_KEEPALIVE wxWasmInputTickStats(int which)
     {
         switch (which)
@@ -920,6 +939,7 @@ extern "C" {
             case 2: return s_inputTicksFrame;
             case 3: return (unsigned)wxWasmDispatchDepth;
             case 4: return s_inputTicksIdle;   // KICLOUD: R-F2a fix 1
+            case 5: return s_inputTicksLong;   // KICLOUD: R-F2a
         }
         return 0;
     }
@@ -936,6 +956,7 @@ extern "C" void EMSCRIPTEN_KEEPALIVE wxWasmJobTick()
     // straight through now run in a loop on this tick; the loop stops at the first job that
     // suspended (the armed fresh tick takes the rest, in order) and after a bounded batch, so a
     // flood of input still lets the page paint between batches.
+    const double tickStart = emscripten_get_now();   // KICLOUD: R-F2a: for the input tick's bound
     for (int batch = 0; batch < 32 && !wxWasmJspiJobs().empty(); ++batch)
     {
         wxWasmJspiJob job = wxWasmJspiJobs().front();
@@ -963,7 +984,7 @@ extern "C" void EMSCRIPTEN_KEEPALIVE wxWasmJobTick()
     // after the next animation frame. With jobs still queued (the batch bound) the armed tick
     // runs them first and then its own input tick.
     if (wxWasmJspiJobs().empty())
-        wxWasmInputTick();
+        wxWasmInputTick(emscripten_get_now() - tickStart);
 }
 
 extern "C" void wxWasmRunOnDispatchContext(void (*fn)(void *), void *arg)
